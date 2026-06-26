@@ -339,6 +339,12 @@ function getMatchStatusLabel(match: FifaMatchRow) {
   return "예정";
 }
 
+function getMatchState(match: FifaMatchRow) {
+  if (isMatchFinished(match)) return "finished";
+  if (match.MatchTime && match.MatchTime !== "0'") return "live";
+  return "scheduled";
+}
+
 function findMatch(matches: FifaMatchRow[], homeCode: string, awayCode: string) {
   return matches.find(
     (match) =>
@@ -660,7 +666,7 @@ function App() {
         {activeTab === "matches" && (
           <div className="matchList">
             {scenarioMatches.map((match) => (
-              <article className="matchRow" key={match.IdMatch}>
+              <article className={`matchRow ${getMatchState(match)}`} key={match.IdMatch}>
                 <div>
                   <strong>{localizedName(match.GroupName)} · {formatMatchDate(match.Date)}</strong>
                   <span>{localizedName(match.Stadium?.Name)} · {localizedName(match.Stadium?.CityName)}</span>
