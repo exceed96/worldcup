@@ -625,7 +625,7 @@ function App() {
                 <div className="rankTeam">
                   <strong>{team.country}</strong>
                   <span>
-                    {team.group} 3위 · FIFA 3위권 {team.fifaRank}위 · {getQualificationStatusLabel(team.qualificationStatus)}
+                    {team.group} · {getQualificationStatusLabel(team.qualificationStatus)}
                   </span>
                 </div>
                 <div className="rankBar">
