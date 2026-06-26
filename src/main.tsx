@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
-import { ArrowUpRight, Radio, Zap } from "lucide-react";
+import { ArrowUpRight, CalendarDays, Check, ListChecks, Radio, Trophy, X, Zap } from "lucide-react";
 import "./styles.css";
 
 type Status = "stable" | "watch" | "danger";
+type RankingTab = "ranking" | "scenarios" | "matches";
 
 type LocalizedText = {
   Locale: string;
@@ -42,6 +43,34 @@ type FifaThirdPlaceResponse = {
   Results?: FifaThirdPlaceRow[];
 };
 
+type FifaMatchTeam = {
+  Score: number | null;
+  TeamName: LocalizedText[];
+  Abbreviation: string;
+  IdTeam: string;
+};
+
+type FifaMatchRow = {
+  IdMatch: string;
+  IdGroup?: string;
+  GroupName?: LocalizedText[];
+  Date: string;
+  Home: FifaMatchTeam | null;
+  Away: FifaMatchTeam | null;
+  HomeTeamScore: number | null;
+  AwayTeamScore: number | null;
+  MatchStatus: number;
+  MatchTime?: string | null;
+  Stadium?: {
+    Name?: LocalizedText[];
+    CityName?: LocalizedText[];
+  };
+};
+
+type FifaMatchesResponse = {
+  Results?: FifaMatchRow[];
+};
+
 type ThirdPlaceTeam = {
   group: string;
   country: string;
@@ -69,8 +98,12 @@ const thirdPlaceQualifyingSlots = 8;
 const groupStageMatches = 3;
 const fifaSeasonId = "285023";
 const fifaThirdStandingPath = `/api/v3/groupstanding/third/${fifaSeasonId}?language=ko`;
+const fifaMatchesPath = `/api/v3/calendar/matches?idSeason=${fifaSeasonId}&language=ko&count=100`;
 const fifaProxyUrl = `/fifa-api${fifaThirdStandingPath}`;
 const fifaDirectUrl = `https://api.fifa.com${fifaThirdStandingPath}`;
+const fifaMatchesProxyUrl = `/fifa-api${fifaMatchesPath}`;
+const fifaMatchesDirectUrl = `https://api.fifa.com${fifaMatchesPath}`;
+const scenarioTeamCodes = ["AUS", "PAR", "GER", "ECU", "JPN", "SWE", "EGY", "IRN", "ESP", "URU", "SEN", "IRQ", "AUT", "ALG", "COD", "UZB", "GHA", "CRO"];
 
 const offlineTeams: ThirdPlaceTeam[] = [
   { group: "F조", country: "스웨덴", code: "SWE", points: 4, played: 3, won: 1, drawn: 1, lost: 1, goalsFor: 7, goalsAgainst: 7, goalDiff: 0, conductScore: -4, probability: 100, previousProbability: 100, status: "stable", liveNote: "FIFA 공식 스냅샷: 현재 진출권", qualificationStatus: "LiveQualified", isLive: true, fifaRank: 1 },
@@ -276,6 +309,125 @@ function formatTime(date: Date) {
   }).format(date);
 }
 
+function formatMatchDate(date: string) {
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "short",
+    day: "numeric",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(date));
+}
+
+function getMatchTeamName(team?: FifaMatchTeam | null) {
+  return localizedName(team?.TeamName, "-");
+}
+
+function getMatchScore(match: FifaMatchRow) {
+  if (match.HomeTeamScore === null || match.AwayTeamScore === null) return "경기 전";
+  return `${match.HomeTeamScore} - ${match.AwayTeamScore}`;
+}
+
+function isMatchFinished(match?: FifaMatchRow) {
+  return match?.HomeTeamScore !== null && match?.AwayTeamScore !== null && match?.MatchStatus === 0;
+}
+
+function getMatchStatusLabel(match: FifaMatchRow) {
+  if (isMatchFinished(match)) return "종료";
+  if (match.MatchTime && match.MatchTime !== "0'") return `진행 중 ${match.MatchTime}`;
+  return "예정";
+}
+
+function findMatch(matches: FifaMatchRow[], homeCode: string, awayCode: string) {
+  return matches.find(
+    (match) =>
+      (match.Home?.Abbreviation === homeCode && match.Away?.Abbreviation === awayCode) ||
+      (match.Home?.Abbreviation === awayCode && match.Away?.Abbreviation === homeCode),
+  );
+}
+
+function teamScore(match: FifaMatchRow, code: string) {
+  if (match.Home?.Abbreviation === code) return match.HomeTeamScore;
+  if (match.Away?.Abbreviation === code) return match.AwayTeamScore;
+  return null;
+}
+
+function scenarioStatus(match: FifaMatchRow | undefined, passes: (match: FifaMatchRow) => boolean) {
+  if (!match || !isMatchFinished(match)) return "pending" as const;
+  return passes(match) ? ("passed" as const) : ("failed" as const);
+}
+
+function buildScenarios(matches: FifaMatchRow[]) {
+  return [
+    {
+      id: "D",
+      group: "D",
+      title: "호주가 파라과이를 잡는다",
+      match: findMatch(matches, "AUS", "PAR"),
+      status: scenarioStatus(findMatch(matches, "AUS", "PAR"), (match) => (teamScore(match, "AUS") ?? -1) > (teamScore(match, "PAR") ?? -1)),
+    },
+    {
+      id: "E",
+      group: "E",
+      title: "독일이 에콰도르를 이긴다",
+      match: findMatch(matches, "GER", "ECU"),
+      status: scenarioStatus(findMatch(matches, "GER", "ECU"), (match) => (teamScore(match, "GER") ?? -1) > (teamScore(match, "ECU") ?? -1)),
+    },
+    {
+      id: "F",
+      group: "F",
+      title: "일본이 스웨덴을 2골 차 이상으로 이긴다",
+      match: findMatch(matches, "JPN", "SWE"),
+      status: scenarioStatus(findMatch(matches, "JPN", "SWE"), (match) => ((teamScore(match, "JPN") ?? -99) - (teamScore(match, "SWE") ?? 99)) >= 2),
+    },
+    {
+      id: "G",
+      group: "G",
+      title: "이집트가 이란을 이긴다",
+      match: findMatch(matches, "EGY", "IRN"),
+      status: scenarioStatus(findMatch(matches, "EGY", "IRN"), (match) => (teamScore(match, "EGY") ?? -1) > (teamScore(match, "IRN") ?? -1)),
+    },
+    {
+      id: "H",
+      group: "H",
+      title: "스페인이 우루과이를 이긴다",
+      match: findMatch(matches, "ESP", "URU"),
+      status: scenarioStatus(findMatch(matches, "ESP", "URU"), (match) => (teamScore(match, "ESP") ?? -1) > (teamScore(match, "URU") ?? -1)),
+    },
+    {
+      id: "I",
+      group: "I",
+      title: "세네갈이 이라크와 비기거나 1골 차로 이긴다",
+      match: findMatch(matches, "SEN", "IRQ"),
+      status: scenarioStatus(findMatch(matches, "SEN", "IRQ"), (match) => {
+        const diff = (teamScore(match, "SEN") ?? -99) - (teamScore(match, "IRQ") ?? 99);
+        return diff === 0 || diff === 1;
+      }),
+    },
+    {
+      id: "J",
+      group: "J",
+      title: "오스트리아가 알제리를 이긴다",
+      match: findMatch(matches, "AUT", "ALG"),
+      status: scenarioStatus(findMatch(matches, "AUT", "ALG"), (match) => (teamScore(match, "AUT") ?? -1) > (teamScore(match, "ALG") ?? -1)),
+    },
+    {
+      id: "K",
+      group: "K",
+      title: "콩고가 우즈베크를 못 이긴다",
+      match: findMatch(matches, "COD", "UZB"),
+      status: scenarioStatus(findMatch(matches, "COD", "UZB"), (match) => (teamScore(match, "COD") ?? 99) <= (teamScore(match, "UZB") ?? -99)),
+    },
+    {
+      id: "L",
+      group: "L",
+      title: "가나가 크로아티아를 이긴다",
+      match: findMatch(matches, "GHA", "CRO"),
+      status: scenarioStatus(findMatch(matches, "GHA", "CRO"), (match) => (teamScore(match, "GHA") ?? -1) > (teamScore(match, "CRO") ?? -1)),
+    },
+  ];
+}
+
 function ProbabilityBar({
   value,
   tone = "default",
@@ -326,13 +478,51 @@ function useLiveTeams() {
   return { teams, updatedAt, source };
 }
 
+function useLiveMatches() {
+  const [matches, setMatches] = useState<FifaMatchRow[]>([]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadMatches() {
+      const urls = [fifaMatchesProxyUrl, fifaMatchesDirectUrl];
+      for (const url of urls) {
+        try {
+          const response = await fetch(url, { cache: "no-store" });
+          if (!response.ok) throw new Error(`FIFA matches ${response.status}`);
+          const data = (await response.json()) as FifaMatchesResponse;
+          if (!Array.isArray(data.Results)) throw new Error("No FIFA matches");
+          if (!ignore) setMatches(data.Results);
+          return;
+        } catch {
+          continue;
+        }
+      }
+    }
+
+    void loadMatches();
+    const matchTimer = window.setInterval(loadMatches, refreshMs);
+    return () => {
+      ignore = true;
+      window.clearInterval(matchTimer);
+    };
+  }, []);
+
+  return matches;
+}
+
 function App() {
   const { teams, updatedAt, source } = useLiveTeams();
+  const matches = useLiveMatches();
+  const [activeTab, setActiveTab] = useState<RankingTab>("ranking");
 
   const sortedThirdPlaceTeams = useMemo(
     () =>
       [...teams].sort((a, b) => {
-        if (a.fifaRank !== b.fifaRank) return a.fifaRank - b.fifaRank;
+        if (b.probability !== a.probability) return b.probability - a.probability;
+        if (/confirmedqualified/i.test(b.qualificationStatus) !== /confirmedqualified/i.test(a.qualificationStatus)) {
+          return /confirmedqualified/i.test(b.qualificationStatus) ? 1 : -1;
+        }
         if (b.points !== a.points) return b.points - a.points;
         if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff;
         return b.goalsFor - a.goalsFor;
@@ -342,6 +532,18 @@ function App() {
 
   const korea = teams.find((team) => team.code === "KOR") ?? teams[0];
   const koreaRank = korea?.fifaRank ?? 0;
+  const scenarios = useMemo(() => buildScenarios(matches), [matches]);
+  const scenarioMatches = useMemo(
+    () =>
+      matches
+        .filter((match) => {
+          const home = match.Home?.Abbreviation;
+          const away = match.Away?.Abbreviation;
+          return Boolean(home && away && scenarioTeamCodes.includes(home) && scenarioTeamCodes.includes(away));
+        })
+        .sort((a, b) => new Date(a.Date).getTime() - new Date(b.Date).getTime()),
+    [matches],
+  );
   const hotTeams = sortedThirdPlaceTeams.filter((team) => team.isLive || Math.abs(team.probability - team.previousProbability) >= 3);
 
   return (
@@ -371,6 +573,7 @@ function App() {
               <ProbabilityBar value={korea.probability} tone="korea" settled={/confirmedqualified/i.test(korea.qualificationStatus)} />
               <div className="meterMeta">
                 <span>FIFA 3위 국가 순위 {koreaRank}위</span>
+                <span>AI 분석 기반 진출 안정도</span>
                 <span className={korea.probability >= korea.previousProbability ? "deltaUp" : "deltaDown"}>
                   직전 대비 {getDeltaLabel(korea)}
                 </span>
@@ -385,37 +588,92 @@ function App() {
         <div className="sectionHeader">
           <div>
             <h2>3위 국가 진출 순위</h2>
-            <p>승점, 득실, 득점, 남은 경기와 현재 8위 컷을 반영한 안정도입니다.</p>
+            <p>AI 분석 기반 진출 안정도입니다. 승점, 득실, 득점, 남은 경기와 현재 8위 컷을 반영합니다.</p>
           </div>
           <span className="cutLine">
             <ArrowUpRight size={16} />
             커트라인 8위
           </span>
         </div>
-        <div className="rankingList">
-          {sortedThirdPlaceTeams.map((team, index) => (
-            <article className={`rankRow ${index < 8 ? "inZone" : "outZone"} ${team.code === "KOR" ? "highlight" : ""}`} key={team.code}>
-              <span className="rankNo">{team.fifaRank}</span>
-              <div className="rankTeam">
-                <strong>{team.country}</strong>
-                <span>
-                  {team.group} 3위 · {getQualificationStatusLabel(team.qualificationStatus)}
-                </span>
-              </div>
-              <div className="rankBar">
-                <ProbabilityBar
-                  value={team.probability}
-                  tone={team.status === "danger" ? "danger" : "default"}
-                  settled={/confirmedqualified/i.test(team.qualificationStatus)}
-                />
-              </div>
-              <div className="rankStat">
-                <strong>{team.probability}%</strong>
-                <span className={team.probability >= team.previousProbability ? "deltaUp" : "deltaDown"}>직전 대비 {getDeltaLabel(team)}</span>
-              </div>
-            </article>
-          ))}
+        <div className="tabs" role="tablist" aria-label="3위권 분석 탭">
+          <button className={activeTab === "ranking" ? "active" : ""} type="button" onClick={() => setActiveTab("ranking")}>
+            <Trophy size={16} />
+            AI 순위
+          </button>
+          <button className={activeTab === "scenarios" ? "active" : ""} type="button" onClick={() => setActiveTab("scenarios")}>
+            <ListChecks size={16} />
+            경우의 수
+          </button>
+          <button className={activeTab === "matches" ? "active" : ""} type="button" onClick={() => setActiveTab("matches")}>
+            <CalendarDays size={16} />
+            경기 일정
+          </button>
         </div>
+
+        {activeTab === "ranking" && (
+          <div className="rankingList">
+            {sortedThirdPlaceTeams.map((team, index) => (
+              <article className={`rankRow ${index < 8 ? "inZone" : "outZone"} ${team.code === "KOR" ? "highlight" : ""}`} key={team.code}>
+                <span className="rankNo">{index + 1}</span>
+                <div className="rankTeam">
+                  <strong>{team.country}</strong>
+                  <span>
+                    {team.group} 3위 · FIFA 3위권 {team.fifaRank}위 · {getQualificationStatusLabel(team.qualificationStatus)}
+                  </span>
+                </div>
+                <div className="rankBar">
+                  <ProbabilityBar
+                    value={team.probability}
+                    tone={team.status === "danger" ? "danger" : "default"}
+                    settled={/confirmedqualified/i.test(team.qualificationStatus)}
+                  />
+                </div>
+                <div className="rankStat">
+                  <strong>{team.probability}%</strong>
+                  <span className={team.probability >= team.previousProbability ? "deltaUp" : "deltaDown"}>직전 대비 {getDeltaLabel(team)}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+
+        {activeTab === "scenarios" && (
+          <div className="scenarioList">
+            {scenarios.map((scenario) => (
+              <article className={`scenarioRow ${scenario.status}`} key={scenario.id}>
+                <span className="scenarioIcon">{scenario.status === "passed" ? <Check size={18} /> : scenario.status === "failed" ? <X size={18} /> : scenario.group}</span>
+                <div>
+                  <strong>{scenario.group}조</strong>
+                  <p>{scenario.title}</p>
+                  {scenario.match && (
+                    <span>
+                      {getMatchTeamName(scenario.match.Home)} {getMatchScore(scenario.match)} {getMatchTeamName(scenario.match.Away)} · {getMatchStatusLabel(scenario.match)}
+                    </span>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+
+        {activeTab === "matches" && (
+          <div className="matchList">
+            {scenarioMatches.map((match) => (
+              <article className="matchRow" key={match.IdMatch}>
+                <div>
+                  <strong>{localizedName(match.GroupName)} · {formatMatchDate(match.Date)}</strong>
+                  <span>{localizedName(match.Stadium?.Name)} · {localizedName(match.Stadium?.CityName)}</span>
+                </div>
+                <div className="matchScore">
+                  <span>{getMatchTeamName(match.Home)}</span>
+                  <strong>{getMatchScore(match)}</strong>
+                  <span>{getMatchTeamName(match.Away)}</span>
+                </div>
+                <em>{getMatchStatusLabel(match)}</em>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="ticker" aria-label="실시간 변동 알림">

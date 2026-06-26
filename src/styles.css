@@ -397,6 +397,36 @@ h2 {
   gap: 10px;
 }
 
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  overflow-x: auto;
+}
+
+.tabs button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(15, 23, 42, 0.72);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.tabs button.active {
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #e0f2fe;
+  background: rgba(56, 189, 248, 0.16);
+}
+
 .rankRow {
   display: grid;
   grid-template-columns: 44px minmax(160px, 1fr) minmax(150px, 0.8fr) minmax(116px, auto);
@@ -468,6 +498,124 @@ h2 {
   font-size: 12px;
   font-weight: 850;
   white-space: nowrap;
+}
+
+.scenarioList,
+.matchList {
+  display: grid;
+  gap: 10px;
+}
+
+.scenarioRow,
+.matchRow {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.66);
+}
+
+.scenarioRow {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px 16px;
+}
+
+.scenarioRow.failed {
+  opacity: 0.58;
+}
+
+.scenarioRow.failed p {
+  text-decoration: line-through;
+}
+
+.scenarioRow.passed {
+  border-color: rgba(34, 197, 94, 0.46);
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.13), rgba(56, 189, 248, 0.05));
+}
+
+.scenarioIcon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #0f172a;
+  background: #cbd5e1;
+  font-weight: 900;
+}
+
+.scenarioRow.passed .scenarioIcon {
+  color: #052e16;
+  background: #86efac;
+}
+
+.scenarioRow.failed .scenarioIcon {
+  color: #450a0a;
+  background: #fca5a5;
+}
+
+.scenarioRow strong,
+.matchRow strong {
+  color: var(--text);
+}
+
+.scenarioRow p {
+  margin-top: 2px;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 850;
+}
+
+.scenarioRow span:not(.scenarioIcon),
+.matchRow span {
+  display: block;
+  margin-top: 4px;
+  color: var(--subtle);
+  font-size: 13px;
+  font-weight: 740;
+}
+
+.matchRow {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(260px, 1.2fr) 86px;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
+}
+
+.matchScore {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.matchScore span {
+  overflow: hidden;
+  margin: 0;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matchScore span:last-child {
+  text-align: right;
+}
+
+.matchScore strong {
+  min-width: 74px;
+  text-align: center;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.matchRow em {
+  justify-self: end;
+  color: #e0f2fe;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 850;
 }
 
 @keyframes livePulse {
@@ -543,6 +691,15 @@ h2 {
   .rankBar {
     grid-column: 2 / -1;
   }
+
+  .matchRow {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .matchRow em {
+    justify-self: start;
+  }
 }
 
 @media (max-width: 560px) {
@@ -602,6 +759,30 @@ h2 {
 
   .rankStat span {
     white-space: normal;
+  }
+
+  .tabs button {
+    flex: 0 0 auto;
+  }
+
+  .scenarioRow {
+    grid-template-columns: 36px minmax(0, 1fr);
+    padding: 14px;
+  }
+
+  .scenarioIcon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .matchScore {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .matchScore span:last-child,
+  .matchScore strong {
+    text-align: left;
   }
 
   .tickerTrack {
