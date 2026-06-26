@@ -538,7 +538,7 @@ function App() {
   );
 
   const korea = teams.find((team) => team.code === "KOR") ?? teams[0];
-  const koreaRank = korea?.fifaRank ?? 0;
+  const koreaRank = sortedThirdPlaceTeams.findIndex((team) => team.code === korea?.code) + 1;
   const scenarios = useMemo(() => buildScenarios(matches), [matches]);
   const scenarioMatches = useMemo(
     () =>
@@ -579,7 +579,7 @@ function App() {
               </div>
               <ProbabilityBar value={korea.probability} tone="korea" settled={/confirmedqualified/i.test(korea.qualificationStatus)} />
               <div className="meterMeta">
-                <span>FIFA 3위 국가 순위 {koreaRank}위</span>
+                <span>3위 국가 순위 비교 {koreaRank}위</span>
                 <span>AI 분석 기반 진출 안정도</span>
                 <span className={korea.probability >= korea.previousProbability ? "deltaUp" : "deltaDown"}>
                   직전 대비 {getDeltaLabel(korea)}
