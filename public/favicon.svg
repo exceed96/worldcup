@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Korea World Cup">
+  <rect width="64" height="64" rx="14" fill="#0b1220"/>
+  <circle cx="32" cy="24" r="16" fill="#f8fafc"/>
+  <path fill="#0ea5e9" d="M32 8a16 16 0 0 1 14.6 9.5L32 24z"/>
+  <path fill="#ef4444" d="M32 24 17.4 17.5A16 16 0 0 1 32 8z"/>
+  <path fill="#22c55e" d="M32 24h16a16 16 0 0 1-25.8 12.6z"/>
+  <path fill="#111827" d="M32 14 39 19l-3 8h-8l-3-8z"/>
+  <path fill="none" stroke="#111827" stroke-width="2.4" stroke-linecap="round" d="m20 22-5-4m29 4 5-4M25 36l-4 6m18-6 4 6"/>
+  <rect x="9" y="43" width="46" height="13" rx="4" fill="#22c55e"/>
+  <text x="32" y="53.5" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="900" fill="#052e16">KOR</text>
+</svg>

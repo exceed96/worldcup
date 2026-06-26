@@ -65,6 +65,8 @@ type ThirdPlaceTeam = {
 };
 
 const refreshMs = 30000;
+const thirdPlaceQualifyingSlots = 8;
+const groupStageMatches = 3;
 const fifaSeasonId = "285023";
 const fifaThirdStandingPath = `/api/v3/groupstanding/third/${fifaSeasonId}?language=ko`;
 const fifaProxyUrl = `/fifa-api${fifaThirdStandingPath}`;
@@ -103,16 +105,112 @@ function getQualificationStatusLabel(qualificationStatus: string) {
   return "확인 중";
 }
 
-function officialIndicator(row: FifaThirdPlaceRow) {
-  const status = row.QualificationStatus ?? "";
-  if (/confirmedqualified|livequalified/i.test(status)) return 100;
-  if (/eliminated|cannot/i.test(status)) return 0;
-  if (row.Position <= 8) return Math.max(51, 95 - row.Position * 3);
-  return Math.max(8, 52 - (row.Position - 8) * 7);
+type QualificationMetric = {
+  points: number;
+  played: number;
+  goalsFor: number;
+  goalDiff: number;
+  qualificationStatus: string;
+  fifaRank: number;
+};
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
 
-function toTeam(row: FifaThirdPlaceRow, previous?: ThirdPlaceTeam): ThirdPlaceTeam {
-  const probability = officialIndicator(row);
+function estimateThirdPlaceChance(team: QualificationMetric, contenders: QualificationMetric[]) {
+  const status = team.qualificationStatus;
+  if (/confirmedqualified|livequalified/i.test(status)) return 100;
+  if (/eliminated|cannot/i.test(status)) return 0;
+
+  const sorted = [...contenders].sort((a, b) => a.fifaRank - b.fifaRank);
+  const cutLine = sorted[thirdPlaceQualifyingSlots - 1];
+  const confirmedCount = sorted.filter((item) => /confirmedqualified|livequalified/i.test(item.qualificationStatus)).length;
+  const openSlots = Math.max(0, thirdPlaceQualifyingSlots - confirmedCount);
+  if (openSlots === 0) return 0;
+
+  const undecided = sorted.filter((item) => !/confirmedqualified|livequalified/i.test(item.qualificationStatus));
+  const undecidedRank = undecided.findIndex((item) => item.fifaRank === team.fifaRank) + 1;
+  const remainingMatches = Math.max(0, groupStageMatches - team.played);
+  const slotsBehindTeam = openSlots - undecidedRank;
+  const pointEdge = team.points - (cutLine?.points ?? 0);
+  const tieBreakEdge = team.goalDiff - (cutLine?.goalDiff ?? 0) + (team.goalsFor - (cutLine?.goalsFor ?? 0)) * 0.25;
+
+  const overtakePressure = undecided
+    .filter((item) => item.fifaRank > team.fifaRank)
+    .reduce((total, challenger) => {
+      const challengerRemaining = Math.max(0, groupStageMatches - challenger.played);
+      const challengerMaxPoints = challenger.points + challengerRemaining * 3;
+
+      if (challengerMaxPoints < team.points) return total;
+      if (challenger.points > team.points) return total + 1;
+
+      if (challengerMaxPoints > team.points) {
+        const pointGap = team.points - challenger.points;
+        const base = pointGap <= 0 ? 0.9 : pointGap === 1 ? 0.78 : pointGap === 2 ? 0.58 : 0.38;
+        const tieAdjust = challenger.goalDiff > team.goalDiff ? 0.08 : challenger.goalDiff < team.goalDiff ? -0.06 : 0;
+        return total + clamp(base + tieAdjust, 0, 1);
+      }
+
+      const projectedGoalDiff = challenger.goalDiff + challengerRemaining;
+      if (projectedGoalDiff > team.goalDiff) return total + 0.52;
+      if (projectedGoalDiff === team.goalDiff) return total + 0.36;
+      return total + 0.18;
+    }, 0);
+
+  const exposedPressure = Math.max(0, overtakePressure - Math.max(0, slotsBehindTeam));
+
+  if (undecidedRank > 0 && undecidedRank <= openSlots) {
+    const completedPenalty = remainingMatches === 0 ? 8 : 0;
+    const rankCushion = Math.max(0, openSlots - undecidedRank) * 2.5;
+    return Math.round(
+      clamp(80 + rankCushion + pointEdge * 7 + tieBreakEdge * 1.5 + remainingMatches * 3 - completedPenalty - exposedPressure * 12, 35, 96),
+    );
+  }
+
+  const distanceFromSlot = undecidedRank > 0 ? undecidedRank - openSlots : team.fifaRank - thirdPlaceQualifyingSlots;
+  const maxPoints = team.points + remainingMatches * 3;
+  const comebackRoom = Math.max(0, maxPoints - (cutLine?.points ?? team.points));
+  return Math.round(clamp(42 - distanceFromSlot * 10 + comebackRoom * 12 + remainingMatches * 8 + tieBreakEdge * 1.2 - exposedPressure * 4, 5, 88));
+}
+
+function rowToMetric(row: FifaThirdPlaceRow): QualificationMetric {
+  return {
+    points: row.Points,
+    played: row.Played,
+    goalsFor: row.For,
+    goalDiff: row.GoalsDiference,
+    qualificationStatus: row.QualificationStatus ?? "Unknown",
+    fifaRank: row.Position,
+  };
+}
+
+function teamToMetric(team: ThirdPlaceTeam): QualificationMetric {
+  return {
+    points: team.points,
+    played: team.played,
+    goalsFor: team.goalsFor,
+    goalDiff: team.goalDiff,
+    qualificationStatus: team.qualificationStatus,
+    fifaRank: team.fifaRank,
+  };
+}
+
+function calibrateTeams(teams: ThirdPlaceTeam[]) {
+  const metrics = teams.map(teamToMetric);
+  return teams.map((team) => {
+    const probability = estimateThirdPlaceChance(teamToMetric(team), metrics);
+    return {
+      ...team,
+      probability,
+      previousProbability: probability,
+      status: getStatus(probability, team.qualificationStatus),
+    };
+  });
+}
+
+function toTeam(row: FifaThirdPlaceRow, contenders: FifaThirdPlaceRow[], previous?: ThirdPlaceTeam): ThirdPlaceTeam {
+  const probability = estimateThirdPlaceChance(rowToMetric(row), contenders.map(rowToMetric));
   const qualificationStatus = row.QualificationStatus ?? "Unknown";
   return {
     group: localizedName(row.Group),
@@ -148,7 +246,7 @@ async function fetchFifaStandings(current: ThirdPlaceTeam[]) {
       const data = (await response.json()) as FifaThirdPlaceResponse;
       if (!Array.isArray(data.Results) || data.Results.length === 0) throw new Error("No FIFA standings");
       return {
-        teams: data.Results.map((row) => toTeam(row, previousByCode.get(row.Team.Abbreviation ?? ""))),
+        teams: data.Results.map((row) => toTeam(row, data.Results ?? [], previousByCode.get(row.Team.Abbreviation ?? ""))),
         source: "FIFA 공식 데이터",
         fetchedAt: new Date(),
       };
@@ -198,10 +296,11 @@ function ProbabilityBar({
 }
 
 function useLiveTeams() {
-  const [teams, setTeams] = useState(offlineTeams);
+  const initialTeams = useMemo(() => calibrateTeams(offlineTeams), []);
+  const [teams, setTeams] = useState(initialTeams);
   const [updatedAt, setUpdatedAt] = useState(new Date());
   const [source, setSource] = useState("FIFA 공식 데이터 연결 중");
-  const teamsRef = useRef(offlineTeams);
+  const teamsRef = useRef(initialTeams);
 
   useEffect(() => {
     let ignore = false;
@@ -264,9 +363,9 @@ function App() {
             <span>32강 진출 가능성</span>
           </h1>
           {korea && (
-            <div className="koreaMeter" aria-label={`대한민국 공식 상태 기반 지표 ${korea.probability}%`}>
+            <div className="koreaMeter" aria-label={`대한민국 진출 안정도 ${korea.probability}%`}>
               <div className="meterHeader">
-                <span>{korea.country}</span>
+                <span>{korea.country} 진출 안정도</span>
                 <strong>{korea.probability}%</strong>
               </div>
               <ProbabilityBar value={korea.probability} tone="korea" settled={/confirmedqualified/i.test(korea.qualificationStatus)} />
@@ -286,7 +385,7 @@ function App() {
         <div className="sectionHeader">
           <div>
             <h2>3위 국가 진출 순위</h2>
-            <p>FIFA 공식 3위 순위와 진출 상태를 기준으로 표시합니다.</p>
+            <p>승점, 득실, 득점, 남은 경기와 현재 8위 컷을 반영한 안정도입니다.</p>
           </div>
           <span className="cutLine">
             <ArrowUpRight size={16} />
