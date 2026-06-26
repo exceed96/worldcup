@@ -264,8 +264,8 @@ async function fetchFifaStandings(current: ThirdPlaceTeam[]) {
 
 function getDeltaLabel(team: ThirdPlaceTeam) {
   const delta = team.probability - team.previousProbability;
-  if (delta === 0) return "0";
-  return `${delta > 0 ? "+" : ""}${delta}`;
+  if (delta === 0) return "변동 없음";
+  return `${delta > 0 ? "+" : ""}${delta}%`;
 }
 
 function formatTime(date: Date) {
@@ -372,7 +372,7 @@ function App() {
               <div className="meterMeta">
                 <span>FIFA 3위 국가 순위 {koreaRank}위</span>
                 <span className={korea.probability >= korea.previousProbability ? "deltaUp" : "deltaDown"}>
-                  직전 대비 {getDeltaLabel(korea)}%
+                  직전 대비 {getDeltaLabel(korea)}
                 </span>
                 <span>승점 {korea.points}, 득실 {korea.goalDiff > 0 ? `+${korea.goalDiff}` : korea.goalDiff}</span>
               </div>
@@ -411,7 +411,7 @@ function App() {
               </div>
               <div className="rankStat">
                 <strong>{team.probability}%</strong>
-                <span className={team.probability >= team.previousProbability ? "deltaUp" : "deltaDown"}>{getDeltaLabel(team)}%</span>
+                <span className={team.probability >= team.previousProbability ? "deltaUp" : "deltaDown"}>{getDeltaLabel(team)}</span>
               </div>
             </article>
           ))}
