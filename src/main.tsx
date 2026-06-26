@@ -421,7 +421,7 @@ function buildScenarios(matches: FifaMatchRow[]) {
     {
       id: "K",
       group: "K",
-      title: "콩고가 우즈베크를 못 이긴다",
+      title: "콩고가 우즈베키스탄을 못 이긴다",
       match: findMatch(matches, "COD", "UZB"),
       status: scenarioStatus(findMatch(matches, "COD", "UZB"), (match) => (teamScore(match, "COD") ?? 99) <= (teamScore(match, "UZB") ?? -99)),
     },
