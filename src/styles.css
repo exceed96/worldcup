@@ -399,7 +399,7 @@ h2 {
 
 .rankRow {
   display: grid;
-  grid-template-columns: 44px minmax(160px, 1fr) minmax(150px, 0.8fr) 66px;
+  grid-template-columns: 44px minmax(160px, 1fr) minmax(150px, 0.8fr) minmax(116px, auto);
   gap: 14px;
   padding: 13px 16px;
 }
@@ -467,6 +467,7 @@ h2 {
 .rankStat span {
   font-size: 12px;
   font-weight: 850;
+  white-space: nowrap;
 }
 
 @keyframes livePulse {
@@ -536,7 +537,7 @@ h2 {
   }
 
   .rankRow {
-    grid-template-columns: 38px minmax(0, 1fr) 62px;
+    grid-template-columns: 38px minmax(0, 1fr) minmax(112px, auto);
   }
 
   .rankBar {
@@ -579,6 +580,28 @@ h2 {
     align-items: flex-start;
     flex-direction: column;
     gap: 6px;
+  }
+
+  .rankRow {
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 10px 12px;
+    padding: 14px;
+  }
+
+  .rankBar,
+  .rankStat {
+    grid-column: 2 / -1;
+  }
+
+  .rankStat {
+    align-items: flex-start;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 10px;
+  }
+
+  .rankStat span {
+    white-space: normal;
   }
 
   .tickerTrack {

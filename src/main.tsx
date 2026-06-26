@@ -411,7 +411,7 @@ function App() {
               </div>
               <div className="rankStat">
                 <strong>{team.probability}%</strong>
-                <span className={team.probability >= team.previousProbability ? "deltaUp" : "deltaDown"}>{getDeltaLabel(team)}</span>
+                <span className={team.probability >= team.previousProbability ? "deltaUp" : "deltaDown"}>직전 대비 {getDeltaLabel(team)}</span>
               </div>
             </article>
           ))}
