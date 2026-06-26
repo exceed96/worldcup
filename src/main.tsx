@@ -409,7 +409,7 @@ function buildScenarios(matches: FifaMatchRow[]) {
       id: "J",
       group: "J",
       title: "오스트리아가 알제리를 이긴다",
-      match: findMatch(matches, "AUT", "ALG"),
+      match: findMatch(matches, "aUT", "ALG"),
       status: scenarioStatus(findMatch(matches, "AUT", "ALG"), (match) => (teamScore(match, "AUT") ?? -1) > (teamScore(match, "ALG") ?? -1)),
     },
     {
