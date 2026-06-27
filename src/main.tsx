@@ -630,9 +630,13 @@ function buildScenarios(matches: FifaMatchRow[]) {
     {
       id: "J",
       group: "J",
-      title: "오스트리아가 알제리를 이긴다",
+      title: "오스트리아가 알제리를 이긴다 or 알제리가 오스트리아를 2골 차 이상으로 이긴다",
       match: findMatch(matches, "AUT", "ALG"),
-      status: scenarioStatus(findMatch(matches, "AUT", "ALG"), (match) => (teamScore(match, "AUT") ?? -1) > (teamScore(match, "ALG") ?? -1)),
+      status: scenarioStatus(findMatch(matches, "AUT", "ALG"), (match) => {
+        const austriaScore = teamScore(match, "AUT") ?? -99;
+        const algeriaScore = teamScore(match, "ALG") ?? -99;
+        return austriaScore > algeriaScore || algeriaScore - austriaScore >= 2;
+      }),
     },
     {
       id: "K",
