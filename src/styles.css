@@ -184,6 +184,22 @@ h1 span {
   white-space: nowrap;
 }
 
+.countryName {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.countryFlag {
+  width: 20px;
+  height: 14px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
 .koreaMeter {
   position: relative;
   z-index: 1;
@@ -540,6 +556,7 @@ h1 span {
 }
 
 .liveMatchScoreboard span:last-child {
+  justify-content: flex-end;
   text-align: right;
 }
 
@@ -790,13 +807,45 @@ h2 {
   font-weight: 850;
 }
 
-.scenarioRow span:not(.scenarioIcon),
+.scenarioRow > div > span,
 .matchRow span {
   display: block;
   margin-top: 4px;
   color: var(--subtle);
   font-size: 13px;
   font-weight: 740;
+}
+
+.scenarioRow .scenarioMatchLine {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
+.scenarioMatchLine .countryFlag {
+  width: 17px;
+  height: 12px;
+}
+
+.scenarioRow .scenarioCountry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  line-height: 1;
+}
+
+.scenarioRow .scenarioScore,
+.scenarioRow .scenarioState {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  line-height: 1;
 }
 
 .matchRow {
@@ -835,8 +884,18 @@ h2 {
   white-space: nowrap;
 }
 
+.matchScore .countryName {
+  display: flex;
+}
+
 .matchScore span:last-child {
+  justify-content: flex-end;
   text-align: right;
+}
+
+.tickerTrack .countryFlag {
+  width: 17px;
+  height: 12px;
 }
 
 .matchScore strong {
@@ -1119,6 +1178,10 @@ h2 {
   .matchScore span:last-child,
   .matchScore strong {
     text-align: left;
+  }
+
+  .matchScore span:last-child {
+    justify-content: flex-start;
   }
 
   .tickerTrack {

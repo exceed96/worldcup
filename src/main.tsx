@@ -235,6 +235,22 @@ function getMatchTeamName(team?: FifaMatchTeam | null) {
   return localizedName(team?.TeamName, "-");
 }
 
+function CountryFlag({ code }: { code?: string | null }) {
+  if (!code) return null;
+  return (
+    <img
+      className="countryFlag"
+      src={`https://api.fifa.com/api/v3/picture/flags-sq-2/${code}`}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      onError={(event) => {
+        event.currentTarget.style.display = "none";
+      }}
+    />
+  );
+}
+
 function getMatchScore(match: FifaMatchRow) {
   if (match.HomeTeamScore === null || match.AwayTeamScore === null) return "경기 전";
   return `${match.HomeTeamScore} - ${match.AwayTeamScore}`;
@@ -828,7 +844,10 @@ function App() {
           {korea && (
             <div className="koreaMeter" aria-label={`대한민국 32강 진출 확률 ${korea.probability}%`}>
               <div className="meterHeader">
-                <span>{korea.country} 32강 진출 확률</span>
+                <span className="countryName">
+                  <CountryFlag code={korea.code} />
+                  {korea.country} 32강 진출 확률
+                </span>
                 <strong>{probabilitiesReady ? `${korea.probability}%` : "계산 중"}</strong>
               </div>
               {probabilitiesReady ? (
@@ -880,9 +899,15 @@ function App() {
                     </span>
                   </div>
                   <div className="liveMatchScoreboard">
-                    <span>{getMatchTeamName(match.Home)}</span>
+                    <span className="countryName">
+                      <CountryFlag code={match.Home?.Abbreviation} />
+                      {getMatchTeamName(match.Home)}
+                    </span>
                     <strong>{showingLiveMatches ? getMatchScore(match) : getScenarioMatchScore(match)}</strong>
-                    <span>{getMatchTeamName(match.Away)}</span>
+                    <span className="countryName">
+                      <CountryFlag code={match.Away?.Abbreviation} />
+                      {getMatchTeamName(match.Away)}
+                    </span>
                   </div>
                   <div className="liveMatchVenue">
                     <span>{localizedName(match.Stadium?.Name)}</span>
@@ -932,7 +957,10 @@ function App() {
               <article className={`rankRow ${index < 8 ? "inZone" : "outZone"} ${team.code === "KOR" ? "highlight" : ""}`} key={team.code}>
                 <span className="rankNo">{index + 1}</span>
                 <div className="rankTeam">
-                  <strong>{team.country}</strong>
+                  <strong className="countryName">
+                    <CountryFlag code={team.code} />
+                    {team.country}
+                  </strong>
                   <span>
                     {team.group} · {getQualificationStatusLabel(team.qualificationStatus)}
                   </span>
@@ -961,8 +989,17 @@ function App() {
                   <strong>{scenario.group}조</strong>
                   <p>{scenario.title}</p>
                   {scenario.match && (
-                    <span>
-                      {getMatchTeamName(scenario.match.Home)} {getScenarioMatchScore(scenario.match)} {getMatchTeamName(scenario.match.Away)} · {getMatchStatusLabel(scenario.match)}
+                    <span className="scenarioMatchLine">
+                      <span className="scenarioCountry">
+                        <CountryFlag code={scenario.match.Home?.Abbreviation} />
+                        {getMatchTeamName(scenario.match.Home)}
+                      </span>
+                      <span className="scenarioScore">{getScenarioMatchScore(scenario.match)}</span>
+                      <span className="scenarioCountry">
+                        <CountryFlag code={scenario.match.Away?.Abbreviation} />
+                        {getMatchTeamName(scenario.match.Away)}
+                      </span>
+                      <span className="scenarioState">· {getMatchStatusLabel(scenario.match)}</span>
                     </span>
                   )}
                 </div>
@@ -980,9 +1017,15 @@ function App() {
                   <span>{localizedName(match.Stadium?.Name)} · {localizedName(match.Stadium?.CityName)}</span>
                 </div>
                 <div className="matchScore">
-                  <span>{getMatchTeamName(match.Home)}</span>
+                  <span className="countryName">
+                    <CountryFlag code={match.Home?.Abbreviation} />
+                    {getMatchTeamName(match.Home)}
+                  </span>
                   <strong>{getMatchScore(match)}</strong>
-                  <span>{getMatchTeamName(match.Away)}</span>
+                  <span className="countryName">
+                    <CountryFlag code={match.Away?.Abbreviation} />
+                    {getMatchTeamName(match.Away)}
+                  </span>
                 </div>
                 <em>{getMatchStatusLabel(match)}</em>
               </article>
@@ -996,6 +1039,7 @@ function App() {
           {[...hotTeams, ...sortedThirdPlaceTeams.slice(0, 4)].map((team, index) => (
             <span key={`${team.code}-${index}`}>
               <Zap size={14} />
+              <CountryFlag code={team.code} />
               {team.country} · {team.group} · {team.liveNote}
             </span>
           ))}
