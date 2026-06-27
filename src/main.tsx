@@ -551,6 +551,13 @@ function App() {
         .sort((a, b) => new Date(a.Date).getTime() - new Date(b.Date).getTime()),
     [matches],
   );
+  const liveMatches = useMemo(
+    () =>
+      matches
+        .filter((match) => getMatchState(match) === "live")
+        .sort((a, b) => new Date(a.Date).getTime() - new Date(b.Date).getTime()),
+    [matches],
+  );
   const hotTeams = sortedThirdPlaceTeams.filter((team) => team.isLive || Math.abs(team.probability - team.previousProbability) >= 3);
 
   return (
@@ -590,6 +597,39 @@ function App() {
           )}
         </div>
       </section>
+
+      {liveMatches.length > 0 && (
+        <section className="liveMatchSection" aria-label="현재 진행 중인 경기">
+          <div className="liveMatchHeading">
+            <div>
+              <span className="liveMatchEyebrow">
+                <span /> LIVE
+              </span>
+              <h2>현재 진행 경기</h2>
+            </div>
+            <strong>{liveMatches.length}경기 진행 중</strong>
+          </div>
+          <div className="liveMatchGrid">
+            {liveMatches.map((match) => (
+              <article className="liveMatchCard" key={match.IdMatch}>
+                <div className="liveMatchMeta">
+                  <strong>{localizedName(match.GroupName)}</strong>
+                  <span>{match.MatchTime}</span>
+                </div>
+                <div className="liveMatchScoreboard">
+                  <span>{getMatchTeamName(match.Home)}</span>
+                  <strong>{getMatchScore(match)}</strong>
+                  <span>{getMatchTeamName(match.Away)}</span>
+                </div>
+                <div className="liveMatchVenue">
+                  <span>{localizedName(match.Stadium?.Name)}</span>
+                  <em>진행 중</em>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="rankingSection" aria-label="3위 국가 진출 순위">
         <div className="sectionHeader">
