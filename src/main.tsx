@@ -235,10 +235,64 @@ function isMatchFinished(match?: FifaMatchRow) {
   return match?.HomeTeamScore !== null && match?.AwayTeamScore !== null && match?.MatchStatus === 0;
 }
 
+type LiveMatchPhase = {
+  kind: "first-half" | "second-half" | "stoppage" | "hydration" | "half-time";
+  clock: string;
+  label: string;
+};
+
+function getLiveMatchPhase(match: FifaMatchRow): LiveMatchPhase | null {
+  if (getMatchState(match) !== "live") return null;
+
+  const rawTime = match.MatchTime?.trim() ?? "";
+  const normalizedTime = rawTime.toLowerCase();
+  const elapsedFromKickoff = (Date.now() - new Date(match.Date).getTime()) / 60000;
+  if (/hydration|cooling|water|수분|음수/.test(normalizedTime)) {
+    return { kind: "hydration", clock: "3분 휴식", label: "수분 보충 휴식" };
+  }
+  if (/^ht$|^전반$|half.?time|interval|전반.?종료/.test(normalizedTime)) {
+    return { kind: "half-time", clock: "하프타임", label: "전반 종료" };
+  }
+  if (!rawTime && match.MatchStatus === 3 && elapsedFromKickoff >= 50 && elapsedFromKickoff <= 75) {
+    return { kind: "half-time", clock: "하프타임", label: "전반 종료" };
+  }
+
+  const minute = Number(rawTime.match(/\d+/)?.[0] ?? 0);
+  if (minute === 22 || minute === 67) {
+    return { kind: "hydration", clock: `${minute}' · 3분`, label: "수분 보충 휴식" };
+  }
+
+  if (minute === 45 && !rawTime.includes("+") && elapsedFromKickoff >= 50) {
+    return { kind: "half-time", clock: "하프타임", label: "전반 종료" };
+  }
+  if (minute <= 45) {
+    return {
+      kind: rawTime.includes("+") ? "stoppage" : "first-half",
+      clock: rawTime || "전반",
+      label: rawTime.includes("+") ? "전반 추가시간" : "전반 진행",
+    };
+  }
+  return {
+    kind: minute >= 90 || rawTime.includes("+") ? "stoppage" : "second-half",
+    clock: rawTime || "후반",
+    label: minute >= 90 || rawTime.includes("+") ? "후반 추가시간" : "후반 진행",
+  };
+}
+
 function getMatchStatusLabel(match: FifaMatchRow) {
   if (isMatchFinished(match)) return "종료";
-  if (match.MatchTime && match.MatchTime !== "0'") return `진행 중 ${match.MatchTime}`;
+  const phase = getLiveMatchPhase(match);
+  if (phase) {
+    if (phase.kind === "hydration" || phase.kind === "half-time") return phase.label;
+    return phase.clock;
+  }
   return "예정";
+}
+
+function getLiveMatchIndicator(phase: LiveMatchPhase | null, fallback?: string | null) {
+  if (!phase) return fallback ?? "진행 중";
+  if (phase.kind === "hydration" || phase.kind === "half-time") return phase.label;
+  return phase.clock;
 }
 
 function getMatchState(match: FifaMatchRow) {
@@ -783,6 +837,7 @@ function App() {
           <div className="liveMatchGrid">
             {liveMatches.map((match) => {
               const relatedScenario = scenarios.find((scenario) => scenario.match?.IdMatch === match.IdMatch);
+              const phase = getLiveMatchPhase(match);
               return (
                 <article className="liveMatchCard" key={match.IdMatch}>
                   {relatedScenario && (
@@ -794,7 +849,7 @@ function App() {
                   )}
                   <div className="liveMatchMeta">
                     <strong>{localizedName(match.GroupName)}</strong>
-                    <span>{match.MatchTime}</span>
+                    <span className={phase?.kind}>{getLiveMatchIndicator(phase, match.MatchTime)}</span>
                   </div>
                   <div className="liveMatchScoreboard">
                     <span>{getMatchTeamName(match.Home)}</span>
@@ -803,7 +858,6 @@ function App() {
                   </div>
                   <div className="liveMatchVenue">
                     <span>{localizedName(match.Stadium?.Name)}</span>
-                    <em>진행 중</em>
                   </div>
                 </article>
               );

@@ -489,6 +489,11 @@ h1 span {
   font-variant-numeric: tabular-nums;
 }
 
+.liveMatchMeta > span.hydration,
+.liveMatchMeta > span.half-time {
+  color: #fde68a;
+}
+
 .liveMatchScoreboard {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -526,14 +531,6 @@ h1 span {
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.liveMatchVenue em {
-  flex: 0 0 auto;
-  color: #5eead4;
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 850;
 }
 
 .sectionHeader {
@@ -957,11 +954,28 @@ h2 {
   }
 
   .rankRow {
-    grid-template-columns: 38px minmax(0, 1fr) minmax(112px, auto);
+    grid-template-columns: 38px minmax(0, 1fr);
   }
 
-  .rankBar {
+  .rankBar,
+  .rankStat {
     grid-column: 2 / -1;
+  }
+
+  .rankStat {
+    width: 100%;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+  }
+
+  .rankStat span {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: right;
   }
 
   .matchRow {
@@ -1056,10 +1070,7 @@ h2 {
   }
 
   .rankStat {
-    align-items: flex-start;
-    flex-direction: row;
-    justify-content: flex-start;
-    gap: 10px;
+    align-items: center;
   }
 
   .rankStat span {
