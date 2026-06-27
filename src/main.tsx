@@ -96,10 +96,12 @@ type ThirdPlaceTeam = {
 
 const refreshMs = 30000;
 const thirdPlaceQualifyingSlots = 8;
-const groupStageMatches = 3;
+const simulationIterations = 20000;
 const fifaSeasonId = "285023";
 const fifaThirdStandingPath = `/api/v3/groupstanding/third/${fifaSeasonId}?language=ko`;
 const fifaMatchesPath = `/api/v3/calendar/matches?idSeason=${fifaSeasonId}&language=ko&count=100`;
+const fifaServerlessStandingsUrl = "/api/fifa?resource=standings";
+const fifaServerlessMatchesUrl = "/api/fifa?resource=matches";
 const fifaProxyUrl = `/fifa-api${fifaThirdStandingPath}`;
 const fifaDirectUrl = `https://api.fifa.com${fifaThirdStandingPath}`;
 const fifaMatchesProxyUrl = `/fifa-api${fifaMatchesPath}`;
@@ -139,113 +141,13 @@ function getQualificationStatusLabel(qualificationStatus: string) {
   return "확인 중";
 }
 
-type QualificationMetric = {
-  points: number;
-  played: number;
-  goalsFor: number;
-  goalDiff: number;
-  qualificationStatus: string;
-  fifaRank: number;
-};
-
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function estimateThirdPlaceChance(team: QualificationMetric, contenders: QualificationMetric[]) {
-  const status = team.qualificationStatus;
-  if (/confirmedqualified|livequalified/i.test(status)) return 100;
-  if (/eliminated|cannot/i.test(status)) return 0;
-
-  const sorted = [...contenders].sort((a, b) => a.fifaRank - b.fifaRank);
-  const cutLine = sorted[thirdPlaceQualifyingSlots - 1];
-  const confirmedCount = sorted.filter((item) => /confirmedqualified|livequalified/i.test(item.qualificationStatus)).length;
-  const openSlots = Math.max(0, thirdPlaceQualifyingSlots - confirmedCount);
-  if (openSlots === 0) return 0;
-
-  const undecided = sorted.filter((item) => !/confirmedqualified|livequalified/i.test(item.qualificationStatus));
-  const undecidedRank = undecided.findIndex((item) => item.fifaRank === team.fifaRank) + 1;
-  const remainingMatches = Math.max(0, groupStageMatches - team.played);
-  const slotsBehindTeam = openSlots - undecidedRank;
-  const pointEdge = team.points - (cutLine?.points ?? 0);
-  const tieBreakEdge = team.goalDiff - (cutLine?.goalDiff ?? 0) + (team.goalsFor - (cutLine?.goalsFor ?? 0)) * 0.25;
-
-  const overtakePressure = undecided
-    .filter((item) => item.fifaRank > team.fifaRank)
-    .reduce((total, challenger) => {
-      const challengerRemaining = Math.max(0, groupStageMatches - challenger.played);
-      const challengerMaxPoints = challenger.points + challengerRemaining * 3;
-
-      if (challengerMaxPoints < team.points) return total;
-      if (challenger.points > team.points) return total + 1;
-
-      if (challengerMaxPoints > team.points) {
-        const pointGap = team.points - challenger.points;
-        const base = pointGap <= 0 ? 0.9 : pointGap === 1 ? 0.78 : pointGap === 2 ? 0.58 : 0.38;
-        const tieAdjust = challenger.goalDiff > team.goalDiff ? 0.08 : challenger.goalDiff < team.goalDiff ? -0.06 : 0;
-        return total + clamp(base + tieAdjust, 0, 1);
-      }
-
-      const projectedGoalDiff = challenger.goalDiff + challengerRemaining;
-      if (projectedGoalDiff > team.goalDiff) return total + 0.52;
-      if (projectedGoalDiff === team.goalDiff) return total + 0.36;
-      return total + 0.18;
-    }, 0);
-
-  const exposedPressure = Math.max(0, overtakePressure - Math.max(0, slotsBehindTeam));
-
-  if (undecidedRank > 0 && undecidedRank <= openSlots) {
-    const completedPenalty = remainingMatches === 0 ? 8 : 0;
-    const rankCushion = Math.max(0, openSlots - undecidedRank) * 2.5;
-    return Math.round(
-      clamp(80 + rankCushion + pointEdge * 7 + tieBreakEdge * 1.5 + remainingMatches * 3 - completedPenalty - exposedPressure * 12, 35, 96),
-    );
-  }
-
-  const distanceFromSlot = undecidedRank > 0 ? undecidedRank - openSlots : team.fifaRank - thirdPlaceQualifyingSlots;
-  const maxPoints = team.points + remainingMatches * 3;
-  const comebackRoom = Math.max(0, maxPoints - (cutLine?.points ?? team.points));
-  return Math.round(clamp(42 - distanceFromSlot * 10 + comebackRoom * 12 + remainingMatches * 8 + tieBreakEdge * 1.2 - exposedPressure * 4, 5, 88));
-}
-
-function rowToMetric(row: FifaThirdPlaceRow): QualificationMetric {
-  return {
-    points: row.Points,
-    played: row.Played,
-    goalsFor: row.For,
-    goalDiff: row.GoalsDiference,
-    qualificationStatus: row.QualificationStatus ?? "Unknown",
-    fifaRank: row.Position,
-  };
-}
-
-function teamToMetric(team: ThirdPlaceTeam): QualificationMetric {
-  return {
-    points: team.points,
-    played: team.played,
-    goalsFor: team.goalsFor,
-    goalDiff: team.goalDiff,
-    qualificationStatus: team.qualificationStatus,
-    fifaRank: team.fifaRank,
-  };
-}
-
-function calibrateTeams(teams: ThirdPlaceTeam[]) {
-  const metrics = teams.map(teamToMetric);
-  return teams.map((team) => {
-    const probability = estimateThirdPlaceChance(teamToMetric(team), metrics);
-    return {
-      ...team,
-      probability,
-      previousProbability: probability,
-      status: getStatus(probability, team.qualificationStatus),
-    };
-  });
-}
-
-function toTeam(row: FifaThirdPlaceRow, contenders: FifaThirdPlaceRow[], previous?: ThirdPlaceTeam): ThirdPlaceTeam {
-  const probability = estimateThirdPlaceChance(rowToMetric(row), contenders.map(rowToMetric));
+function toTeam(row: FifaThirdPlaceRow, previous?: ThirdPlaceTeam): ThirdPlaceTeam {
   const qualificationStatus = row.QualificationStatus ?? "Unknown";
+  const probability = previous?.probability ?? (/confirmedqualified|livequalified/i.test(qualificationStatus) ? 100 : 0);
   return {
     group: localizedName(row.Group),
     country: localizedName(row.Team.Name),
@@ -271,7 +173,7 @@ function toTeam(row: FifaThirdPlaceRow, contenders: FifaThirdPlaceRow[], previou
 
 async function fetchFifaStandings(current: ThirdPlaceTeam[]) {
   const previousByCode = new Map(current.map((team) => [team.code, team]));
-  const urls = [fifaProxyUrl, fifaDirectUrl];
+  const urls = [fifaServerlessStandingsUrl, fifaProxyUrl, fifaDirectUrl];
 
   for (const url of urls) {
     try {
@@ -280,7 +182,7 @@ async function fetchFifaStandings(current: ThirdPlaceTeam[]) {
       const data = (await response.json()) as FifaThirdPlaceResponse;
       if (!Array.isArray(data.Results) || data.Results.length === 0) throw new Error("No FIFA standings");
       return {
-        teams: data.Results.map((row) => toTeam(row, data.Results ?? [], previousByCode.get(row.Team.Abbreviation ?? ""))),
+        teams: data.Results.map((row) => toTeam(row, previousByCode.get(row.Team.Abbreviation ?? ""))),
         source: "FIFA 공식 데이터",
         fetchedAt: new Date(),
       };
@@ -341,8 +243,254 @@ function getMatchStatusLabel(match: FifaMatchRow) {
 
 function getMatchState(match: FifaMatchRow) {
   if (isMatchFinished(match)) return "finished";
-  if (match.MatchTime && match.MatchTime !== "0'") return "live";
+  if (match.MatchStatus === 3 || (match.MatchTime && match.MatchTime !== "0'")) return "live";
   return "scheduled";
+}
+
+type SimulationStanding = {
+  code: string;
+  group: string;
+  played: number;
+  points: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDiff: number;
+};
+
+type SimulationResult = {
+  home: string;
+  away: string;
+  homeScore: number;
+  awayScore: number;
+};
+
+type TeamForm = {
+  played: number;
+  goalsFor: number;
+  goalsAgainst: number;
+};
+
+function createSeededRandom(seed: number) {
+  let value = seed >>> 0;
+  return () => {
+    value += 0x6d2b79f5;
+    let output = value;
+    output = Math.imul(output ^ (output >>> 15), output | 1);
+    output ^= output + Math.imul(output ^ (output >>> 7), output | 61);
+    return ((output ^ (output >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hashMatchSnapshot(matches: FifaMatchRow[]) {
+  let hash = 2166136261;
+  const snapshot = matches
+    .map((match) => `${match.IdMatch}:${match.HomeTeamScore}:${match.AwayTeamScore}:${match.MatchStatus}:${match.MatchTime ?? ""}`)
+    .join("|");
+  for (let index = 0; index < snapshot.length; index += 1) {
+    hash ^= snapshot.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function samplePoisson(lambda: number, random: () => number) {
+  const limit = Math.exp(-lambda);
+  let product = 1;
+  let goals = 0;
+  do {
+    goals += 1;
+    product *= random();
+  } while (product > limit);
+  return goals - 1;
+}
+
+function applySimulationResult(standingByCode: Map<string, SimulationStanding>, result: SimulationResult) {
+  const home = standingByCode.get(result.home);
+  const away = standingByCode.get(result.away);
+  if (!home || !away) return;
+
+  home.played += 1;
+  away.played += 1;
+  home.goalsFor += result.homeScore;
+  home.goalsAgainst += result.awayScore;
+  away.goalsFor += result.awayScore;
+  away.goalsAgainst += result.homeScore;
+  home.goalDiff = home.goalsFor - home.goalsAgainst;
+  away.goalDiff = away.goalsFor - away.goalsAgainst;
+
+  if (result.homeScore > result.awayScore) home.points += 3;
+  else if (result.homeScore < result.awayScore) away.points += 3;
+  else {
+    home.points += 1;
+    away.points += 1;
+  }
+}
+
+function rankGroup(
+  standings: SimulationStanding[],
+  results: SimulationResult[],
+  conductByCode: Map<string, number>,
+  currentThirdRankByCode: Map<string, number>,
+) {
+  const pointsGroups = new Map<number, SimulationStanding[]>();
+  standings.forEach((standing) => {
+    const tied = pointsGroups.get(standing.points) ?? [];
+    tied.push(standing);
+    pointsGroups.set(standing.points, tied);
+  });
+
+  return [...pointsGroups.entries()]
+    .sort(([pointsA], [pointsB]) => pointsB - pointsA)
+    .flatMap(([, tied]) => {
+      if (tied.length === 1) return tied;
+      const tiedCodes = new Set(tied.map((standing) => standing.code));
+      const headToHead = new Map(tied.map((standing) => [standing.code, { points: 0, goalsFor: 0, goalsAgainst: 0 }]));
+      results.forEach((result) => {
+        if (!tiedCodes.has(result.home) || !tiedCodes.has(result.away)) return;
+        const home = headToHead.get(result.home)!;
+        const away = headToHead.get(result.away)!;
+        home.goalsFor += result.homeScore;
+        home.goalsAgainst += result.awayScore;
+        away.goalsFor += result.awayScore;
+        away.goalsAgainst += result.homeScore;
+        if (result.homeScore > result.awayScore) home.points += 3;
+        else if (result.homeScore < result.awayScore) away.points += 3;
+        else {
+          home.points += 1;
+          away.points += 1;
+        }
+      });
+
+      return tied.sort((a, b) => {
+        const headA = headToHead.get(a.code)!;
+        const headB = headToHead.get(b.code)!;
+        if (headB.points !== headA.points) return headB.points - headA.points;
+        const headGoalDiffA = headA.goalsFor - headA.goalsAgainst;
+        const headGoalDiffB = headB.goalsFor - headB.goalsAgainst;
+        if (headGoalDiffB !== headGoalDiffA) return headGoalDiffB - headGoalDiffA;
+        if (headB.goalsFor !== headA.goalsFor) return headB.goalsFor - headA.goalsFor;
+        if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff;
+        if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+        const conductA = conductByCode.get(a.code) ?? -5;
+        const conductB = conductByCode.get(b.code) ?? -5;
+        if (conductB !== conductA) return conductB - conductA;
+        const rankA = currentThirdRankByCode.get(a.code) ?? 99;
+        const rankB = currentThirdRankByCode.get(b.code) ?? 99;
+        if (rankA !== rankB) return rankA - rankB;
+        return a.code.localeCompare(b.code);
+      });
+    });
+}
+
+function simulateQualification(matches: FifaMatchRow[], trackedTeams: ThirdPlaceTeam[]) {
+  const groupMatches = matches.filter(
+    (match) => match.GroupName?.length && match.Home?.Abbreviation && match.Away?.Abbreviation,
+  );
+  if (groupMatches.length < 60) return new Map<string, number>();
+
+  const groups = new Map<string, Set<string>>();
+  const baseStandings = new Map<string, SimulationStanding>();
+  const baseResultsByGroup = new Map<string, SimulationResult[]>();
+  const forms = new Map<string, TeamForm>();
+  const openMatches: Array<{ match: FifaMatchRow; group: string }> = [];
+
+  groupMatches.forEach((match) => {
+    const group = localizedName(match.GroupName, match.IdGroup ?? "-");
+    const home = match.Home!.Abbreviation;
+    const away = match.Away!.Abbreviation;
+    const groupCodes = groups.get(group) ?? new Set<string>();
+    groupCodes.add(home);
+    groupCodes.add(away);
+    groups.set(group, groupCodes);
+    [home, away].forEach((code) => {
+      if (!baseStandings.has(code)) {
+        baseStandings.set(code, { code, group, played: 0, points: 0, goalsFor: 0, goalsAgainst: 0, goalDiff: 0 });
+      }
+      if (!forms.has(code)) forms.set(code, { played: 0, goalsFor: 0, goalsAgainst: 0 });
+    });
+
+    if (isMatchFinished(match)) {
+      const result = { home, away, homeScore: match.HomeTeamScore!, awayScore: match.AwayTeamScore! };
+      applySimulationResult(baseStandings, result);
+      const groupResults = baseResultsByGroup.get(group) ?? [];
+      groupResults.push(result);
+      baseResultsByGroup.set(group, groupResults);
+      const homeForm = forms.get(home)!;
+      const awayForm = forms.get(away)!;
+      homeForm.played += 1;
+      awayForm.played += 1;
+      homeForm.goalsFor += result.homeScore;
+      homeForm.goalsAgainst += result.awayScore;
+      awayForm.goalsFor += result.awayScore;
+      awayForm.goalsAgainst += result.homeScore;
+    } else {
+      openMatches.push({ match, group });
+    }
+  });
+
+  const completedMatches = [...baseResultsByGroup.values()].reduce((total, results) => total + results.length, 0);
+  const completedGoals = [...baseResultsByGroup.values()].flat().reduce((total, result) => total + result.homeScore + result.awayScore, 0);
+  const averageGoals = completedMatches > 0 ? completedGoals / (completedMatches * 2) : 1.25;
+  const expectedGoals = (teamCode: string, opponentCode: string) => {
+    const team = forms.get(teamCode) ?? { played: 0, goalsFor: 0, goalsAgainst: 0 };
+    const opponent = forms.get(opponentCode) ?? { played: 0, goalsFor: 0, goalsAgainst: 0 };
+    const attack = (team.goalsFor + averageGoals * 2) / (team.played + 2);
+    const opponentDefence = (opponent.goalsAgainst + averageGoals * 2) / (opponent.played + 2);
+    return clamp((attack * opponentDefence) / averageGoals, 0.25, 3.4);
+  };
+
+  const conductByCode = new Map(trackedTeams.map((team) => [team.code, team.conductScore ?? -5]));
+  const currentThirdRankByCode = new Map(trackedTeams.map((team) => [team.code, team.fifaRank]));
+  const qualificationCounts = new Map([...baseStandings.keys()].map((code) => [code, 0]));
+  const random = createSeededRandom(hashMatchSnapshot(groupMatches));
+
+  for (let iteration = 0; iteration < simulationIterations; iteration += 1) {
+    const standings = new Map([...baseStandings].map(([code, standing]) => [code, { ...standing }]));
+    const resultsByGroup = new Map([...baseResultsByGroup].map(([group, results]) => [group, [...results]]));
+
+    openMatches.forEach(({ match, group }) => {
+      const home = match.Home!.Abbreviation;
+      const away = match.Away!.Abbreviation;
+      const minute = Number(match.MatchTime?.match(/\d+/)?.[0] ?? 0);
+      const remainingShare = getMatchState(match) === "live" ? clamp((90 - minute) / 90, 0, 1) : 1;
+      const result = {
+        home,
+        away,
+        homeScore: (match.HomeTeamScore ?? 0) + samplePoisson(expectedGoals(home, away) * remainingShare, random),
+        awayScore: (match.AwayTeamScore ?? 0) + samplePoisson(expectedGoals(away, home) * remainingShare, random),
+      };
+      applySimulationResult(standings, result);
+      const groupResults = resultsByGroup.get(group) ?? [];
+      groupResults.push(result);
+      resultsByGroup.set(group, groupResults);
+    });
+
+    const thirdPlaced: SimulationStanding[] = [];
+    groups.forEach((codes, group) => {
+      const groupStandings = [...codes].map((code) => standings.get(code)!).filter(Boolean);
+      const ranked = rankGroup(groupStandings, resultsByGroup.get(group) ?? [], conductByCode, currentThirdRankByCode);
+      ranked.slice(0, 2).forEach((team) => qualificationCounts.set(team.code, (qualificationCounts.get(team.code) ?? 0) + 1));
+      if (ranked[2]) thirdPlaced.push(ranked[2]);
+    });
+
+    thirdPlaced
+      .sort((a, b) => {
+        if (b.points !== a.points) return b.points - a.points;
+        if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff;
+        if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+        const conductA = conductByCode.get(a.code) ?? -5;
+        const conductB = conductByCode.get(b.code) ?? -5;
+        if (conductB !== conductA) return conductB - conductA;
+        const rankA = currentThirdRankByCode.get(a.code) ?? 99;
+        const rankB = currentThirdRankByCode.get(b.code) ?? 99;
+        if (rankA !== rankB) return rankA - rankB;
+        return a.code.localeCompare(b.code);
+      })
+      .slice(0, thirdPlaceQualifyingSlots)
+      .forEach((team) => qualificationCounts.set(team.code, (qualificationCounts.get(team.code) ?? 0) + 1));
+  }
+
+  return new Map([...qualificationCounts].map(([code, count]) => [code, Math.round((count / simulationIterations) * 100)]));
 }
 
 function findMatch(matches: FifaMatchRow[], homeCode: string, awayCode: string) {
@@ -455,7 +603,7 @@ function ProbabilityBar({
 }
 
 function useLiveTeams() {
-  const initialTeams = useMemo(() => calibrateTeams(offlineTeams), []);
+  const initialTeams = useMemo(() => offlineTeams, []);
   const [teams, setTeams] = useState(initialTeams);
   const [updatedAt, setUpdatedAt] = useState(new Date());
   const [source, setSource] = useState("FIFA 공식 데이터 연결 중");
@@ -492,7 +640,7 @@ function useLiveMatches() {
     let ignore = false;
 
     async function loadMatches() {
-      const urls = [fifaMatchesProxyUrl, fifaMatchesDirectUrl];
+      const urls = [fifaServerlessMatchesUrl, fifaMatchesProxyUrl, fifaMatchesDirectUrl];
       for (const url of urls) {
         try {
           const response = await fetch(url, { cache: "no-store" });
@@ -519,9 +667,29 @@ function useLiveMatches() {
 }
 
 function App() {
-  const { teams, updatedAt, source } = useLiveTeams();
+  const { teams: fifaTeams, updatedAt, source } = useLiveTeams();
   const matches = useLiveMatches();
   const [activeTab, setActiveTab] = useState<RankingTab>("ranking");
+  const previousProbabilitiesRef = useRef(new Map<string, number>());
+  const simulatedProbabilities = useMemo(() => simulateQualification(matches, fifaTeams), [matches, fifaTeams]);
+  const probabilitiesReady = simulatedProbabilities.size > 0;
+  const teams = useMemo(
+    () =>
+      fifaTeams.map((team) => {
+        const probability = simulatedProbabilities.get(team.code) ?? team.probability;
+        return {
+          ...team,
+          probability,
+          previousProbability: previousProbabilitiesRef.current.get(team.code) ?? probability,
+          status: getStatus(probability, team.qualificationStatus),
+        };
+      }),
+    [fifaTeams, simulatedProbabilities],
+  );
+
+  useEffect(() => {
+    previousProbabilitiesRef.current = new Map(teams.map((team) => [team.code, team.probability]));
+  }, [teams]);
 
   const sortedThirdPlaceTeams = useMemo(
     () =>
@@ -579,15 +747,18 @@ function App() {
             <span>32강 진출 가능성</span>
           </h1>
           {korea && (
-            <div className="koreaMeter" aria-label={`대한민국 진출 안정도 ${korea.probability}%`}>
+            <div className="koreaMeter" aria-label={`대한민국 32강 진출 확률 ${korea.probability}%`}>
               <div className="meterHeader">
-                <span>{korea.country} 진출 안정도</span>
-                <strong>{korea.probability}%</strong>
+                <span>{korea.country} 32강 진출 확률</span>
+                <strong>{probabilitiesReady ? `${korea.probability}%` : "계산 중"}</strong>
               </div>
-              <ProbabilityBar value={korea.probability} tone="korea" settled={/confirmedqualified/i.test(korea.qualificationStatus)} />
+              {probabilitiesReady ? (
+                <ProbabilityBar value={korea.probability} tone="korea" settled={/confirmedqualified/i.test(korea.qualificationStatus)} />
+              ) : (
+                <div className="bar barKorea probabilityLoading" aria-label="32강 진출 확률 계산 중" />
+              )}
               <div className="meterMeta">
                 <span>3위 국가 순위 비교 {koreaRank}위</span>
-                <span>AI 분석 기반 진출 안정도</span>
                 <span className={korea.probability >= korea.previousProbability ? "deltaUp" : "deltaDown"}>
                   직전 대비 {getDeltaLabel(korea)}
                 </span>
@@ -610,23 +781,33 @@ function App() {
             <strong>{liveMatches.length}경기 진행 중</strong>
           </div>
           <div className="liveMatchGrid">
-            {liveMatches.map((match) => (
-              <article className="liveMatchCard" key={match.IdMatch}>
-                <div className="liveMatchMeta">
-                  <strong>{localizedName(match.GroupName)}</strong>
-                  <span>{match.MatchTime}</span>
-                </div>
-                <div className="liveMatchScoreboard">
-                  <span>{getMatchTeamName(match.Home)}</span>
-                  <strong>{getMatchScore(match)}</strong>
-                  <span>{getMatchTeamName(match.Away)}</span>
-                </div>
-                <div className="liveMatchVenue">
-                  <span>{localizedName(match.Stadium?.Name)}</span>
-                  <em>진행 중</em>
-                </div>
-              </article>
-            ))}
+            {liveMatches.map((match) => {
+              const relatedScenario = scenarios.find((scenario) => scenario.match?.IdMatch === match.IdMatch);
+              return (
+                <article className="liveMatchCard" key={match.IdMatch}>
+                  {relatedScenario && (
+                    <div className="helpfulOutcome">
+                      <Check size={13} />
+                      <span>한국에 유리</span>
+                      <strong>{relatedScenario.title}</strong>
+                    </div>
+                  )}
+                  <div className="liveMatchMeta">
+                    <strong>{localizedName(match.GroupName)}</strong>
+                    <span>{match.MatchTime}</span>
+                  </div>
+                  <div className="liveMatchScoreboard">
+                    <span>{getMatchTeamName(match.Home)}</span>
+                    <strong>{getMatchScore(match)}</strong>
+                    <span>{getMatchTeamName(match.Away)}</span>
+                  </div>
+                  <div className="liveMatchVenue">
+                    <span>{localizedName(match.Stadium?.Name)}</span>
+                    <em>진행 중</em>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </section>
       )}
@@ -635,7 +816,7 @@ function App() {
         <div className="sectionHeader">
           <div>
             <h2>3위 국가 진출 순위</h2>
-            <p>AI 분석 기반 진출 안정도입니다. 승점, 득실, 득점, 남은 경기와 현재 8위 컷을 반영합니다.</p>
+            <p>AI 통계모형이 공식 스코어, 남은 시간과 FIFA 순위 규정을 반영해 20,000회 계산한 확률입니다.</p>
           </div>
           <span className="cutLine">
             <ArrowUpRight size={16} />
@@ -657,7 +838,13 @@ function App() {
           </button>
         </div>
 
-        {activeTab === "ranking" && (
+        {activeTab === "ranking" && !probabilitiesReady && (
+          <div className="probabilityNotice" role="status">
+            FIFA 경기 데이터를 불러와 진출 확률을 계산하고 있습니다.
+          </div>
+        )}
+
+        {activeTab === "ranking" && probabilitiesReady && (
           <div className="rankingList">
             {sortedThirdPlaceTeams.map((team, index) => (
               <article className={`rankRow ${index < 8 ? "inZone" : "outZone"} ${team.code === "KOR" ? "highlight" : ""}`} key={team.code}>
