@@ -86,7 +86,6 @@ type ThirdPlaceTeam = {
   goalDiff: number;
   conductScore?: number;
   probability: number;
-  previousProbability: number;
   status: Status;
   liveNote: string;
   qualificationStatus: string;
@@ -109,18 +108,18 @@ const fifaMatchesDirectUrl = `https://api.fifa.com${fifaMatchesPath}`;
 const scenarioTeamCodes = ["AUS", "PAR", "GER", "ECU", "JPN", "SWE", "EGY", "IRN", "ESP", "URU", "SEN", "IRQ", "AUT", "ALG", "COD", "UZB", "GHA", "CRO"];
 
 const offlineTeams: ThirdPlaceTeam[] = [
-  { group: "F조", country: "스웨덴", code: "SWE", points: 4, played: 3, won: 1, drawn: 1, lost: 1, goalsFor: 7, goalsAgainst: 7, goalDiff: 0, conductScore: -4, probability: 100, previousProbability: 100, status: "stable", liveNote: "FIFA 공식 스냅샷: 현재 진출권", qualificationStatus: "LiveQualified", isLive: true, fifaRank: 1 },
-  { group: "E조", country: "에콰도르", code: "ECU", points: 4, played: 3, won: 1, drawn: 1, lost: 1, goalsFor: 2, goalsAgainst: 2, goalDiff: 0, conductScore: -5, probability: 100, previousProbability: 100, status: "stable", liveNote: "FIFA 공식 스냅샷: 진출 확정", qualificationStatus: "ConfirmedQualified", isLive: false, fifaRank: 2 },
-  { group: "B조", country: "보스니아 헤르체고비나", code: "BIH", points: 4, played: 3, won: 1, drawn: 1, lost: 1, goalsFor: 5, goalsAgainst: 6, goalDiff: -1, conductScore: -10, probability: 100, previousProbability: 100, status: "stable", liveNote: "FIFA 공식 스냅샷: 진출 확정", qualificationStatus: "ConfirmedQualified", isLive: false, fifaRank: 3 },
-  { group: "L조", country: "크로아티아", code: "CRO", points: 3, played: 2, won: 1, drawn: 0, lost: 1, goalsFor: 3, goalsAgainst: 4, goalDiff: -1, conductScore: -1, probability: 83, previousProbability: 83, status: "stable", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 4 },
-  { group: "A조", country: "대한민국", code: "KOR", points: 3, played: 3, won: 1, drawn: 0, lost: 2, goalsFor: 2, goalsAgainst: 3, goalDiff: -1, conductScore: -4, probability: 80, previousProbability: 80, status: "stable", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 5 },
-  { group: "J조", country: "알제리", code: "ALG", points: 3, played: 2, won: 1, drawn: 0, lost: 1, goalsFor: 2, goalsAgainst: 4, goalDiff: -2, conductScore: -1, probability: 77, previousProbability: 77, status: "stable", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 6 },
-  { group: "D조", country: "파라과이", code: "PAR", points: 3, played: 2, won: 1, drawn: 0, lost: 1, goalsFor: 2, goalsAgainst: 4, goalDiff: -2, conductScore: -11, probability: 74, previousProbability: 74, status: "watch", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 7 },
-  { group: "C조", country: "스코틀랜드", code: "SCO", points: 3, played: 3, won: 1, drawn: 0, lost: 2, goalsFor: 1, goalsAgainst: 4, goalDiff: -3, conductScore: -5, probability: 71, previousProbability: 71, status: "watch", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 8 },
-  { group: "H조", country: "카보베르데", code: "CPV", points: 2, played: 2, won: 0, drawn: 2, lost: 0, goalsFor: 2, goalsAgainst: 2, goalDiff: 0, conductScore: -3, probability: 45, previousProbability: 45, status: "danger", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 9 },
-  { group: "G조", country: "벨기에", code: "BEL", points: 2, played: 2, won: 0, drawn: 2, lost: 0, goalsFor: 1, goalsAgainst: 1, goalDiff: 0, conductScore: -7, probability: 38, previousProbability: 38, status: "danger", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 10 },
-  { group: "K조", country: "콩고 민주 공화국", code: "COD", points: 1, played: 2, won: 0, drawn: 1, lost: 1, goalsFor: 1, goalsAgainst: 2, goalDiff: -1, conductScore: -2, probability: 31, previousProbability: 31, status: "danger", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 11 },
-  { group: "I조", country: "세네갈", code: "SEN", points: 0, played: 2, won: 0, drawn: 0, lost: 2, goalsFor: 3, goalsAgainst: 6, goalDiff: -3, conductScore: 0, probability: 24, previousProbability: 24, status: "danger", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 12 },
+  { group: "F조", country: "스웨덴", code: "SWE", points: 4, played: 3, won: 1, drawn: 1, lost: 1, goalsFor: 7, goalsAgainst: 7, goalDiff: 0, conductScore: -4, probability: 100, status: "stable", liveNote: "FIFA 공식 스냅샷: 현재 진출권", qualificationStatus: "LiveQualified", isLive: true, fifaRank: 1 },
+  { group: "E조", country: "에콰도르", code: "ECU", points: 4, played: 3, won: 1, drawn: 1, lost: 1, goalsFor: 2, goalsAgainst: 2, goalDiff: 0, conductScore: -5, probability: 100, status: "stable", liveNote: "FIFA 공식 스냅샷: 진출 확정", qualificationStatus: "ConfirmedQualified", isLive: false, fifaRank: 2 },
+  { group: "B조", country: "보스니아 헤르체고비나", code: "BIH", points: 4, played: 3, won: 1, drawn: 1, lost: 1, goalsFor: 5, goalsAgainst: 6, goalDiff: -1, conductScore: -10, probability: 100, status: "stable", liveNote: "FIFA 공식 스냅샷: 진출 확정", qualificationStatus: "ConfirmedQualified", isLive: false, fifaRank: 3 },
+  { group: "L조", country: "크로아티아", code: "CRO", points: 3, played: 2, won: 1, drawn: 0, lost: 1, goalsFor: 3, goalsAgainst: 4, goalDiff: -1, conductScore: -1, probability: 83, status: "stable", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 4 },
+  { group: "A조", country: "대한민국", code: "KOR", points: 3, played: 3, won: 1, drawn: 0, lost: 2, goalsFor: 2, goalsAgainst: 3, goalDiff: -1, conductScore: -4, probability: 80, status: "stable", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 5 },
+  { group: "J조", country: "알제리", code: "ALG", points: 3, played: 2, won: 1, drawn: 0, lost: 1, goalsFor: 2, goalsAgainst: 4, goalDiff: -2, conductScore: -1, probability: 77, status: "stable", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 6 },
+  { group: "D조", country: "파라과이", code: "PAR", points: 3, played: 2, won: 1, drawn: 0, lost: 1, goalsFor: 2, goalsAgainst: 4, goalDiff: -2, conductScore: -11, probability: 74, status: "watch", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 7 },
+  { group: "C조", country: "스코틀랜드", code: "SCO", points: 3, played: 3, won: 1, drawn: 0, lost: 2, goalsFor: 1, goalsAgainst: 4, goalDiff: -3, conductScore: -5, probability: 71, status: "watch", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 8 },
+  { group: "H조", country: "카보베르데", code: "CPV", points: 2, played: 2, won: 0, drawn: 2, lost: 0, goalsFor: 2, goalsAgainst: 2, goalDiff: 0, conductScore: -3, probability: 45, status: "danger", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 9 },
+  { group: "G조", country: "벨기에", code: "BEL", points: 2, played: 2, won: 0, drawn: 2, lost: 0, goalsFor: 1, goalsAgainst: 1, goalDiff: 0, conductScore: -7, probability: 38, status: "danger", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 10 },
+  { group: "K조", country: "콩고 민주 공화국", code: "COD", points: 1, played: 2, won: 0, drawn: 1, lost: 1, goalsFor: 1, goalsAgainst: 2, goalDiff: -1, conductScore: -2, probability: 31, status: "danger", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 11 },
+  { group: "I조", country: "세네갈", code: "SEN", points: 0, played: 2, won: 0, drawn: 0, lost: 2, goalsFor: 3, goalsAgainst: 6, goalDiff: -3, conductScore: 0, probability: 24, status: "danger", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 12 },
 ];
 
 function localizedName(values?: LocalizedText[], fallback = "-") {
@@ -162,7 +161,6 @@ function toTeam(row: FifaThirdPlaceRow, previous?: ThirdPlaceTeam): ThirdPlaceTe
     goalDiff: row.GoalsDiference,
     conductScore: row.TeamConductScore,
     probability,
-    previousProbability: previous?.probability ?? probability,
     status: getStatus(probability, qualificationStatus),
     liveNote: `FIFA 공식 상태: ${getQualificationStatusLabel(qualificationStatus)}`,
     qualificationStatus,
@@ -196,12 +194,6 @@ async function fetchFifaStandings(current: ThirdPlaceTeam[]) {
     source: current.length ? "FIFA 공식 데이터 연결 대기" : "오프라인 공식 스냅샷",
     fetchedAt: new Date(),
   };
-}
-
-function getDeltaLabel(team: ThirdPlaceTeam) {
-  const delta = team.probability - team.previousProbability;
-  if (delta === 0) return "변동 없음";
-  return `${delta > 0 ? "+" : ""}${delta}%`;
 }
 
 function formatTime(date: Date) {
@@ -748,7 +740,6 @@ function App() {
   const { teams: fifaTeams, updatedAt, source } = useLiveTeams();
   const matches = useLiveMatches();
   const [activeTab, setActiveTab] = useState<RankingTab>("ranking");
-  const previousProbabilitiesRef = useRef(new Map<string, number>());
   const simulatedProbabilities = useMemo(() => simulateQualification(matches, fifaTeams), [matches, fifaTeams]);
   const probabilitiesReady = simulatedProbabilities.size > 0;
   const teams = useMemo(
@@ -758,16 +749,11 @@ function App() {
         return {
           ...team,
           probability,
-          previousProbability: previousProbabilitiesRef.current.get(team.code) ?? probability,
           status: getStatus(probability, team.qualificationStatus),
         };
       }),
     [fifaTeams, simulatedProbabilities],
   );
-
-  useEffect(() => {
-    previousProbabilitiesRef.current = new Map(teams.map((team) => [team.code, team.probability]));
-  }, [teams]);
 
   const sortedThirdPlaceTeams = useMemo(
     () =>
@@ -818,7 +804,7 @@ function App() {
   }, [scenarios]);
   const showingLiveMatches = liveMatches.length > 0;
   const featuredMatches = showingLiveMatches ? liveMatches : upcomingScenarioMatches;
-  const hotTeams = sortedThirdPlaceTeams.filter((team) => team.isLive || Math.abs(team.probability - team.previousProbability) >= 3);
+  const hotTeams = sortedThirdPlaceTeams.filter((team) => team.isLive);
 
   return (
     <main className="page">
@@ -851,9 +837,6 @@ function App() {
               )}
               <div className="meterMeta">
                 <span>3위 국가 순위 비교 {koreaRank}위</span>
-                <span className={korea.probability >= korea.previousProbability ? "deltaUp" : "deltaDown"}>
-                  직전 대비 {getDeltaLabel(korea)}
-                </span>
                 <span>승점 {korea.points}, 득실 {korea.goalDiff > 0 ? `+${korea.goalDiff}` : korea.goalDiff}</span>
               </div>
             </div>
@@ -962,7 +945,6 @@ function App() {
                 </div>
                 <div className="rankStat">
                   <strong>{team.probability}%</strong>
-                  <span className={team.probability >= team.previousProbability ? "deltaUp" : "deltaDown"}>직전 대비 {getDeltaLabel(team)}</span>
                 </div>
               </article>
             ))}

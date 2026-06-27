@@ -604,14 +604,6 @@ h2 {
   box-shadow: inset 4px 0 0 var(--korea);
 }
 
-.deltaUp {
-  color: #5eead4;
-}
-
-.deltaDown {
-  color: var(--warning);
-}
-
 .cutLine {
   flex: 0 0 auto;
   gap: 6px;
