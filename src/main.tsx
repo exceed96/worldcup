@@ -231,6 +231,11 @@ function getMatchScore(match: FifaMatchRow) {
   return `${match.HomeTeamScore} - ${match.AwayTeamScore}`;
 }
 
+function getScenarioMatchScore(match: FifaMatchRow) {
+  if (match.HomeTeamScore === null || match.AwayTeamScore === null) return "vs";
+  return getMatchScore(match);
+}
+
 function isMatchFinished(match?: FifaMatchRow) {
   return match?.HomeTeamScore !== null && match?.AwayTeamScore !== null && match?.MatchStatus === 0;
 }
@@ -935,7 +940,7 @@ function App() {
                   <p>{scenario.title}</p>
                   {scenario.match && (
                     <span>
-                      {getMatchTeamName(scenario.match.Home)} {getMatchScore(scenario.match)} {getMatchTeamName(scenario.match.Away)} · {getMatchStatusLabel(scenario.match)}
+                      {getMatchTeamName(scenario.match.Home)} {getScenarioMatchScore(scenario.match)} {getMatchTeamName(scenario.match.Away)} · {getMatchStatusLabel(scenario.match)}
                     </span>
                   )}
                 </div>
