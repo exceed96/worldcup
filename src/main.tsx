@@ -105,8 +105,6 @@ const fifaProxyUrl = `/fifa-api${fifaThirdStandingPath}`;
 const fifaDirectUrl = `https://api.fifa.com${fifaThirdStandingPath}`;
 const fifaMatchesProxyUrl = `/fifa-api${fifaMatchesPath}`;
 const fifaMatchesDirectUrl = `https://api.fifa.com${fifaMatchesPath}`;
-const scenarioTeamCodes = ["AUS", "PAR", "GER", "ECU", "JPN", "SWE", "EGY", "IRN", "ESP", "URU", "SEN", "IRQ", "AUT", "ALG", "COD", "UZB", "GHA", "CRO"];
-
 const offlineTeams: ThirdPlaceTeam[] = [
   { group: "F조", country: "스웨덴", code: "SWE", points: 4, played: 3, won: 1, drawn: 1, lost: 1, goalsFor: 7, goalsAgainst: 7, goalDiff: 0, conductScore: -4, probability: 100, status: "stable", liveNote: "FIFA 공식 스냅샷: 현재 진출권", qualificationStatus: "LiveQualified", isLive: true, fifaRank: 1 },
   { group: "E조", country: "에콰도르", code: "ECU", points: 4, played: 3, won: 1, drawn: 1, lost: 1, goalsFor: 2, goalsAgainst: 2, goalDiff: 0, conductScore: -5, probability: 100, status: "stable", liveNote: "FIFA 공식 스냅샷: 진출 확정", qualificationStatus: "ConfirmedQualified", isLive: false, fifaRank: 2 },
@@ -773,15 +771,14 @@ function App() {
   const koreaRank = sortedThirdPlaceTeams.findIndex((team) => team.code === korea?.code) + 1;
   const scenarios = useMemo(() => buildScenarios(matches), [matches]);
   const scenarioMatches = useMemo(
-    () =>
-      matches
-        .filter((match) => {
-          const home = match.Home?.Abbreviation;
-          const away = match.Away?.Abbreviation;
-          return Boolean(home && away && scenarioTeamCodes.includes(home) && scenarioTeamCodes.includes(away));
-        })
-        .sort((a, b) => new Date(a.Date).getTime() - new Date(b.Date).getTime()),
-    [matches],
+    () => {
+      const uniqueMatches = new Map<string, FifaMatchRow>();
+      scenarios.forEach((scenario) => {
+        if (scenario.match) uniqueMatches.set(scenario.match.IdMatch, scenario.match);
+      });
+      return [...uniqueMatches.values()].sort((a, b) => new Date(a.Date).getTime() - new Date(b.Date).getTime());
+    },
+    [scenarios],
   );
   const liveMatches = useMemo(
     () =>
