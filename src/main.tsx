@@ -214,11 +214,30 @@ function formatTime(date: Date) {
 
 function formatMatchDate(date: string) {
   return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
     month: "short",
     day: "numeric",
     weekday: "short",
     hour: "2-digit",
     minute: "2-digit",
+  }).format(new Date(date));
+}
+
+function getMatchDayKey(date: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(date));
+}
+
+function formatMatchDay(date: string) {
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
   }).format(new Date(date));
 }
 
@@ -785,6 +804,20 @@ function App() {
         .sort((a, b) => new Date(a.Date).getTime() - new Date(b.Date).getTime()),
     [matches],
   );
+  const upcomingScenarioMatches = useMemo(() => {
+    const uniqueMatches = new Map<string, FifaMatchRow>();
+    scenarios.forEach((scenario) => {
+      if (scenario.status === "pending" && scenario.match && getMatchState(scenario.match) === "scheduled") {
+        uniqueMatches.set(scenario.match.IdMatch, scenario.match);
+      }
+    });
+    const upcoming = [...uniqueMatches.values()].sort((a, b) => new Date(a.Date).getTime() - new Date(b.Date).getTime());
+    if (!upcoming[0]) return [];
+    const nextMatchDay = getMatchDayKey(upcoming[0].Date);
+    return upcoming.filter((match) => getMatchDayKey(match.Date) === nextMatchDay);
+  }, [scenarios]);
+  const showingLiveMatches = liveMatches.length > 0;
+  const featuredMatches = showingLiveMatches ? liveMatches : upcomingScenarioMatches;
   const hotTeams = sortedThirdPlaceTeams.filter((team) => team.isLive || Math.abs(team.probability - team.previousProbability) >= 3);
 
   return (
@@ -828,23 +861,27 @@ function App() {
         </div>
       </section>
 
-      {liveMatches.length > 0 && (
-        <section className="liveMatchSection" aria-label="현재 진행 중인 경기">
+      {featuredMatches.length > 0 && (
+        <section className={`liveMatchSection ${showingLiveMatches ? "" : "upcoming"}`} aria-label={showingLiveMatches ? "현재 진행 중인 경기" : "다음 경우의 수 경기"}>
           <div className="liveMatchHeading">
             <div>
               <span className="liveMatchEyebrow">
-                <span /> LIVE
+                <span /> {showingLiveMatches ? "LIVE" : "NEXT"}
               </span>
-              <h2>현재 진행 경기</h2>
+              <h2>{showingLiveMatches ? "현재 진행 경기" : "다음 경우의 수 경기"}</h2>
             </div>
-            <strong>{liveMatches.length}경기 진행 중</strong>
+            <strong>
+              {showingLiveMatches
+                ? `${featuredMatches.length}경기 진행 중`
+                : `${formatMatchDay(featuredMatches[0].Date)} · ${featuredMatches.length}경기 예정`}
+            </strong>
           </div>
           <div className="liveMatchGrid">
-            {liveMatches.map((match) => {
+            {featuredMatches.map((match) => {
               const relatedScenario = scenarios.find((scenario) => scenario.match?.IdMatch === match.IdMatch);
               const phase = getLiveMatchPhase(match);
               return (
-                <article className="liveMatchCard" key={match.IdMatch}>
+                <article className={`liveMatchCard ${showingLiveMatches ? "" : "scheduled"}`} key={match.IdMatch}>
                   {relatedScenario && (
                     <div className="helpfulOutcome">
                       <Check size={13} />
@@ -854,11 +891,13 @@ function App() {
                   )}
                   <div className="liveMatchMeta">
                     <strong>{localizedName(match.GroupName)}</strong>
-                    <span className={phase?.kind}>{getLiveMatchIndicator(phase, match.MatchTime)}</span>
+                    <span className={phase?.kind}>
+                      {showingLiveMatches ? getLiveMatchIndicator(phase, match.MatchTime) : formatMatchDate(match.Date)}
+                    </span>
                   </div>
                   <div className="liveMatchScoreboard">
                     <span>{getMatchTeamName(match.Home)}</span>
-                    <strong>{getMatchScore(match)}</strong>
+                    <strong>{showingLiveMatches ? getMatchScore(match) : getScenarioMatchScore(match)}</strong>
                     <span>{getMatchTeamName(match.Away)}</span>
                   </div>
                   <div className="liveMatchVenue">
