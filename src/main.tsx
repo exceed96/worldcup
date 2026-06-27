@@ -95,7 +95,6 @@ type ThirdPlaceTeam = {
 
 const refreshMs = 30000;
 const thirdPlaceQualifyingSlots = 8;
-const requiredScenarioPasses = 3;
 const simulationIterations = 20000;
 const fifaSeasonId = "285023";
 const fifaThirdStandingPath = `/api/v3/groupstanding/third/${fifaSeasonId}?language=ko`;
@@ -132,7 +131,6 @@ function getStatus(probability: number, qualificationStatus: string): Status {
 }
 
 function getQualificationStatusLabel(qualificationStatus: string) {
-  if (/qualifiedbyscenarios/i.test(qualificationStatus)) return "진출 성공";
   if (/confirmedqualified/i.test(qualificationStatus)) return "진출 확정";
   if (/livequalified/i.test(qualificationStatus)) return "현재 진출권";
   if (/couldqualify/i.test(qualificationStatus)) return "진출 가능";
@@ -659,7 +657,7 @@ function buildScenarios(matches: FifaMatchRow[]) {
     {
       id: "K",
       group: "K",
-      title: "우주베키스탄이 가나를 이기거나 비긴다",
+      title: "우주베키스탄이 콩고를 이기거나 비긴다",
       match: findMatch(matches, "COD", "UZB"),
       status: scenarioStatus(findMatch(matches, "COD", "UZB"), (match) => (teamScore(match, "COD") ?? 99) <= (teamScore(match, "UZB") ?? -99)),
     },
@@ -760,33 +758,19 @@ function App() {
   const { teams: fifaTeams, updatedAt, source } = useLiveTeams();
   const matches = useLiveMatches();
   const [activeTab, setActiveTab] = useState<RankingTab>("ranking");
-  const scenarios = useMemo(() => buildScenarios(matches), [matches]);
-  const passedScenarioCount = scenarios.filter((scenario) => scenario.status === "passed").length;
-  const possibleScenarioPasses = scenarios.filter((scenario) => scenario.status !== "failed").length;
-  const koreaQualifiedByScenarios = passedScenarioCount >= requiredScenarioPasses;
-  const koreaEliminatedByScenarios = !koreaQualifiedByScenarios && possibleScenarioPasses < requiredScenarioPasses;
   const simulatedProbabilities = useMemo(() => simulateQualification(matches, fifaTeams), [matches, fifaTeams]);
   const probabilitiesReady = simulatedProbabilities.size > 0;
   const teams = useMemo(
     () =>
       fifaTeams.map((team) => {
-        const modeledProbability = simulatedProbabilities.get(team.code) ?? team.probability;
-        const isKoreaQualified = team.code === "KOR" && koreaQualifiedByScenarios;
-        const isKoreaEliminated = team.code === "KOR" && koreaEliminatedByScenarios;
-        const probability = isKoreaQualified ? 100 : isKoreaEliminated ? 0 : modeledProbability;
-        const qualificationStatus = isKoreaQualified
-          ? "QualifiedByScenarios"
-          : isKoreaEliminated
-            ? "EliminatedByScenarios"
-            : team.qualificationStatus;
+        const probability = simulatedProbabilities.get(team.code) ?? team.probability;
         return {
           ...team,
           probability,
-          qualificationStatus,
-          status: getStatus(probability, qualificationStatus),
+          status: getStatus(probability, team.qualificationStatus),
         };
       }),
-    [fifaTeams, koreaEliminatedByScenarios, koreaQualifiedByScenarios, simulatedProbabilities],
+    [fifaTeams, simulatedProbabilities],
   );
 
   const sortedThirdPlaceTeams = useMemo(
@@ -805,6 +789,7 @@ function App() {
 
   const korea = teams.find((team) => team.code === "KOR") ?? teams[0];
   const koreaRank = sortedThirdPlaceTeams.findIndex((team) => team.code === korea?.code) + 1;
+  const scenarios = useMemo(() => buildScenarios(matches), [matches]);
   const scenarioMatches = useMemo(
     () => {
       const uniqueMatches = new Map<string, FifaMatchRow>();
@@ -852,12 +837,6 @@ function App() {
               {source} · {formatTime(updatedAt)}
             </div>
           </div>
-          {koreaQualifiedByScenarios && (
-            <div className="qualificationBanner" role="status">
-              <Check size={18} />
-              대한민국 32강 진출 성공
-            </div>
-          )}
           <h1>
             대한민국
             <span>32강 진출 가능성</span>
@@ -879,7 +858,6 @@ function App() {
               <div className="meterMeta">
                 <span>3위 국가 순위 비교 {koreaRank}위</span>
                 <span>승점 {korea.points}, 득실 {korea.goalDiff > 0 ? `+${korea.goalDiff}` : korea.goalDiff}</span>
-                {koreaEliminatedByScenarios && <span className="scenarioEliminated">경우의 수 3개 미달 · 32강 진출 실패</span>}
               </div>
             </div>
           )}
