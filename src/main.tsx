@@ -62,6 +62,7 @@ type FifaMatchRow = {
   AwayTeamScore: number | null;
   MatchStatus: number;
   MatchTime?: string | null;
+  IsHydrationBreak?: boolean;
   Stadium?: {
     Name?: LocalizedText[];
     CityName?: LocalizedText[];
@@ -96,6 +97,7 @@ type ThirdPlaceTeam = {
 const liveRefreshMs = 15000;
 const idleRefreshMs = 30000;
 const thirdPlaceQualifyingSlots = 8;
+const requiredScenarioPasses = 3;
 const simulationIterations = 20000;
 const fifaSeasonId = "285023";
 const fifaThirdStandingPath = `/api/v3/groupstanding/third/${fifaSeasonId}?language=ko`;
@@ -136,6 +138,7 @@ function getStatus(probability: number, qualificationStatus: string): Status {
 }
 
 function getQualificationStatusLabel(qualificationStatus: string) {
+  if (/qualifiedbyscenarios/i.test(qualificationStatus)) return "진출 성공";
   if (/confirmedqualified/i.test(qualificationStatus)) return "진출 확정";
   if (/livequalified/i.test(qualificationStatus)) return "현재 진출권";
   if (/couldqualify/i.test(qualificationStatus)) return "진출 가능";
@@ -282,7 +285,7 @@ function getLiveMatchPhase(match: FifaMatchRow): LiveMatchPhase | null {
   const rawTime = match.MatchTime?.trim() ?? "";
   const normalizedTime = rawTime.toLowerCase();
   const elapsedFromKickoff = (Date.now() - new Date(match.Date).getTime()) / 60000;
-  if (/hydration|cooling|water|수분|음수/.test(normalizedTime)) {
+  if (match.IsHydrationBreak || /hydration|cooling|water|수분|음수/.test(normalizedTime)) {
     return { kind: "hydration", clock: "3분 휴식", label: "수분 보충 휴식" };
   }
   if (/^ht$|^전반$|half.?time|interval|전반.?종료/.test(normalizedTime)) {
@@ -293,10 +296,6 @@ function getLiveMatchPhase(match: FifaMatchRow): LiveMatchPhase | null {
   }
 
   const minute = Number(rawTime.match(/\d+/)?.[0] ?? 0);
-  if (minute === 22 || minute === 67) {
-    return { kind: "hydration", clock: `${minute}' · 3분`, label: "수분 보충 휴식" };
-  }
-
   if (minute === 45 && !rawTime.includes("+") && elapsedFromKickoff >= 50) {
     return { kind: "half-time", clock: "하프타임", label: "전반 종료" };
   }
@@ -730,6 +729,7 @@ function useLiveTeams(hasLiveMatches: boolean) {
 
 function useLiveMatches() {
   const [matches, setMatches] = useState<FifaMatchRow[]>([]);
+  const hydrationObservationsRef = useRef(new Map<string, { minute: number; score: string; observedAt: number }>());
 
   useEffect(() => {
     let ignore = false;
@@ -744,14 +744,36 @@ function useLiveMatches() {
           if (!response.ok) throw new Error(`FIFA matches ${response.status}`);
           const data = (await response.json()) as FifaMatchesResponse;
           if (!Array.isArray(data.Results)) throw new Error("No FIFA matches");
-          if (!ignore) setMatches(data.Results);
-          nextRefreshMs = data.Results.some((match) => getMatchState(match) === "live") ? liveRefreshMs : idleRefreshMs;
+          const observedAt = Date.now();
+          const observedMatches = data.Results.map((match) => {
+            const minute = Number(match.MatchTime?.match(/\d+/)?.[0] ?? 0);
+            if (match.MatchStatus !== 3 || (minute !== 22 && minute !== 67)) {
+              hydrationObservationsRef.current.delete(match.IdMatch);
+              return match;
+            }
+
+            const score = `${match.HomeTeamScore ?? "-"}:${match.AwayTeamScore ?? "-"}`;
+            const previous = hydrationObservationsRef.current.get(match.IdMatch);
+            if (!previous || previous.minute !== minute || previous.score !== score) {
+              hydrationObservationsRef.current.set(match.IdMatch, { minute, score, observedAt });
+              return match;
+            }
+
+            return {
+              ...match,
+              IsHydrationBreak: observedAt - previous.observedAt >= 60000,
+            };
+          });
+          if (!ignore) setMatches(observedMatches);
+          nextRefreshMs = observedMatches.some((match) => getMatchState(match) === "live") ? liveRefreshMs : idleRefreshMs;
           break;
         } catch {
           continue;
         }
       }
-      if (!ignore) matchTimer = window.setTimeout(loadMatches, nextRefreshMs);
+      if (!ignore) {
+        matchTimer = window.setTimeout(loadMatches, nextRefreshMs);
+      }
     }
 
     void loadMatches();
@@ -769,19 +791,55 @@ function App() {
   const hasLiveMatches = matches.some((match) => getMatchState(match) === "live");
   const { teams: fifaTeams, updatedAt, source } = useLiveTeams(hasLiveMatches);
   const [activeTab, setActiveTab] = useState<RankingTab>("ranking");
+  const [failureModalOpen, setFailureModalOpen] = useState(false);
+  const failureCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const scenarios = useMemo(() => buildScenarios(matches), [matches]);
+  const passedScenarioCount = scenarios.filter((scenario) => scenario.status === "passed").length;
+  const possibleScenarioPasses = scenarios.filter((scenario) => scenario.status !== "failed").length;
+  const koreaQualifiedByScenarios = passedScenarioCount >= requiredScenarioPasses;
+  const koreaEliminatedByScenarios = !koreaQualifiedByScenarios && possibleScenarioPasses < requiredScenarioPasses;
   const simulatedProbabilities = useMemo(() => simulateQualification(matches, fifaTeams), [matches, fifaTeams]);
   const probabilitiesReady = simulatedProbabilities.size > 0;
+
+  useEffect(() => {
+    if (koreaEliminatedByScenarios) setFailureModalOpen(true);
+  }, [koreaEliminatedByScenarios]);
+
+  useEffect(() => {
+    if (!failureModalOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFailureModalOpen(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    failureCloseButtonRef.current?.focus();
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [failureModalOpen]);
+
   const teams = useMemo(
     () =>
       fifaTeams.map((team) => {
-        const probability = simulatedProbabilities.get(team.code) ?? team.probability;
+        const modeledProbability = simulatedProbabilities.get(team.code) ?? team.probability;
+        const isKoreaQualified = team.code === "KOR" && koreaQualifiedByScenarios;
+        const isKoreaEliminated = team.code === "KOR" && koreaEliminatedByScenarios;
+        const probability = isKoreaQualified ? 100 : isKoreaEliminated ? 0 : modeledProbability;
+        const qualificationStatus = isKoreaQualified
+          ? "QualifiedByScenarios"
+          : isKoreaEliminated
+            ? "EliminatedByScenarios"
+            : team.qualificationStatus;
         return {
           ...team,
           probability,
-          status: getStatus(probability, team.qualificationStatus),
+          qualificationStatus,
+          status: getStatus(probability, qualificationStatus),
         };
       }),
-    [fifaTeams, simulatedProbabilities],
+    [fifaTeams, koreaEliminatedByScenarios, koreaQualifiedByScenarios, simulatedProbabilities],
   );
 
   const sortedThirdPlaceTeams = useMemo(
@@ -800,7 +858,6 @@ function App() {
 
   const korea = teams.find((team) => team.code === "KOR") ?? teams[0];
   const koreaRank = sortedThirdPlaceTeams.findIndex((team) => team.code === korea?.code) + 1;
-  const scenarios = useMemo(() => buildScenarios(matches), [matches]);
   const scenarioMatches = useMemo(
     () => {
       const uniqueMatches = new Map<string, FifaMatchRow>();
@@ -848,6 +905,12 @@ function App() {
               {source} · {formatTime(updatedAt)}
             </div>
           </div>
+          {koreaQualifiedByScenarios && (
+            <div className="qualificationBanner" role="status">
+              <Check size={18} />
+              대한민국 32강 진출 성공
+            </div>
+          )}
           <h1>
             대한민국
             <span>32강 진출 가능성</span>
@@ -869,6 +932,7 @@ function App() {
               <div className="meterMeta">
                 <span>3위 국가 순위 비교 {koreaRank}위</span>
                 <span>승점 {korea.points}, 득실 {korea.goalDiff > 0 ? `+${korea.goalDiff}` : korea.goalDiff}</span>
+                {koreaEliminatedByScenarios && <span className="scenarioEliminated">경우의 수 3개 미달 · 32강 진출 실패</span>}
               </div>
             </div>
           )}
@@ -1056,6 +1120,34 @@ function App() {
           ))}
         </div>
       </section>
+
+      {failureModalOpen && (
+        <div className="failureModalBackdrop" role="presentation" onClick={() => setFailureModalOpen(false)}>
+          <section
+            className="failureModal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="failure-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              ref={failureCloseButtonRef}
+              className="failureModalClose"
+              type="button"
+              aria-label="닫기"
+              onClick={() => setFailureModalOpen(false)}
+            >
+              <X size={20} />
+            </button>
+            <span className="failureModalStatus">진출 결과</span>
+            <h2 id="failure-modal-title">대한민국 32강 진출 실패</h2>
+            <p>필요한 경우의 수 3개를 충족하지 못했습니다.</p>
+            <button className="failureModalConfirm" type="button" onClick={() => setFailureModalOpen(false)}>
+              확인
+            </button>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

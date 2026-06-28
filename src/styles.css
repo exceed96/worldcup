@@ -927,6 +927,93 @@ h2 {
   height: 12px;
 }
 
+.failureModalBackdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(2, 6, 23, 0.76);
+  backdrop-filter: blur(8px);
+}
+
+.failureModal {
+  position: relative;
+  width: min(100%, 440px);
+  padding: 34px 30px 28px;
+  border: 1px solid rgba(251, 113, 133, 0.45);
+  border-radius: 8px;
+  background: #0f172a;
+  box-shadow:
+    inset 4px 0 0 #fb7185,
+    0 28px 80px rgba(2, 6, 23, 0.62);
+  text-align: center;
+}
+
+.failureModalClose {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.failureModalClose:hover,
+.failureModalClose:focus-visible {
+  color: var(--text);
+  background: rgba(148, 163, 184, 0.12);
+  outline: none;
+}
+
+.failureModalStatus {
+  display: inline-block;
+  margin-bottom: 12px;
+  color: #fda4af;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.failureModal h2 {
+  color: var(--text);
+  font-size: 28px;
+  line-height: 1.25;
+}
+
+.failureModal p {
+  margin-top: 10px;
+  color: var(--subtle);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.failureModalConfirm {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 24px;
+  border: 1px solid rgba(251, 113, 133, 0.5);
+  border-radius: 6px;
+  color: #fff1f2;
+  background: rgba(225, 29, 72, 0.2);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.failureModalConfirm:hover,
+.failureModalConfirm:focus-visible {
+  border-color: #fb7185;
+  background: rgba(225, 29, 72, 0.3);
+  outline: none;
+}
+
 .matchScore strong {
   min-width: 74px;
   color: #7dd3fc;
