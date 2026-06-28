@@ -93,7 +93,8 @@ type ThirdPlaceTeam = {
   fifaRank: number;
 };
 
-const refreshMs = 30000;
+const liveRefreshMs = 15000;
+const idleRefreshMs = 30000;
 const thirdPlaceQualifyingSlots = 8;
 const simulationIterations = 20000;
 const fifaSeasonId = "285023";
@@ -116,12 +117,16 @@ const offlineTeams: ThirdPlaceTeam[] = [
   { group: "C조", country: "스코틀랜드", code: "SCO", points: 3, played: 3, won: 1, drawn: 0, lost: 2, goalsFor: 1, goalsAgainst: 4, goalDiff: -3, conductScore: -5, probability: 71, status: "watch", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 8 },
   { group: "H조", country: "카보베르데", code: "CPV", points: 2, played: 2, won: 0, drawn: 2, lost: 0, goalsFor: 2, goalsAgainst: 2, goalDiff: 0, conductScore: -3, probability: 45, status: "danger", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 9 },
   { group: "G조", country: "벨기에", code: "BEL", points: 2, played: 2, won: 0, drawn: 2, lost: 0, goalsFor: 1, goalsAgainst: 1, goalDiff: 0, conductScore: -7, probability: 38, status: "danger", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 10 },
-  { group: "K조", country: "콩고 민주 공화국", code: "COD", points: 1, played: 2, won: 0, drawn: 1, lost: 1, goalsFor: 1, goalsAgainst: 2, goalDiff: -1, conductScore: -2, probability: 31, status: "danger", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 11 },
+  { group: "K조", country: "콩고 DR", code: "COD", points: 1, played: 2, won: 0, drawn: 1, lost: 1, goalsFor: 1, goalsAgainst: 2, goalDiff: -1, conductScore: -2, probability: 31, status: "danger", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 11 },
   { group: "I조", country: "세네갈", code: "SEN", points: 0, played: 2, won: 0, drawn: 0, lost: 2, goalsFor: 3, goalsAgainst: 6, goalDiff: -3, conductScore: 0, probability: 24, status: "danger", liveNote: "FIFA 공식 스냅샷: 진출 가능", qualificationStatus: "CouldQualify", isLive: false, fifaRank: 12 },
 ];
 
 function localizedName(values?: LocalizedText[], fallback = "-") {
   return values?.find((item) => item.Locale.toLowerCase().startsWith("ko"))?.Description ?? values?.[0]?.Description ?? fallback;
+}
+
+function getCountryDisplayName(name: string, code?: string | null) {
+  return code === "COD" ? "콩고 DR" : name;
 }
 
 function getStatus(probability: number, qualificationStatus: string): Status {
@@ -147,7 +152,7 @@ function toTeam(row: FifaThirdPlaceRow, previous?: ThirdPlaceTeam): ThirdPlaceTe
   const probability = previous?.probability ?? (/confirmedqualified|livequalified/i.test(qualificationStatus) ? 100 : 0);
   return {
     group: localizedName(row.Group),
-    country: localizedName(row.Team.Name),
+    country: getCountryDisplayName(localizedName(row.Team.Name), row.Team.Abbreviation),
     code: row.Team.Abbreviation ?? row.Team.IdAssociation ?? row.Team.IdCountry ?? row.IdTeam,
     points: row.Points,
     played: row.Played,
@@ -232,7 +237,7 @@ function formatMatchDay(date: string) {
 }
 
 function getMatchTeamName(team?: FifaMatchTeam | null) {
-  return localizedName(team?.TeamName, "-");
+  return getCountryDisplayName(localizedName(team?.TeamName, "-"), team?.Abbreviation);
 }
 
 function CountryFlag({ code }: { code?: string | null }) {
@@ -657,7 +662,7 @@ function buildScenarios(matches: FifaMatchRow[]) {
     {
       id: "K",
       group: "K",
-      title: "우주베키스탄이 콩고를 이기거나 비긴다",
+      title: "우즈베키스탄이 콩고 DR을 이기거나 비긴다",
       match: findMatch(matches, "COD", "UZB"),
       status: scenarioStatus(findMatch(matches, "COD", "UZB"), (match) => (teamScore(match, "COD") ?? 99) <= (teamScore(match, "UZB") ?? -99)),
     },
@@ -690,7 +695,7 @@ function ProbabilityBar({
   );
 }
 
-function useLiveTeams() {
+function useLiveTeams(hasLiveMatches: boolean) {
   const initialTeams = useMemo(() => offlineTeams, []);
   const [teams, setTeams] = useState(initialTeams);
   const [updatedAt, setUpdatedAt] = useState(new Date());
@@ -710,13 +715,13 @@ function useLiveTeams() {
     }
 
     void loadFeed();
-    const feedTimer = window.setInterval(loadFeed, refreshMs);
+    const feedTimer = window.setInterval(loadFeed, hasLiveMatches ? liveRefreshMs : idleRefreshMs);
 
     return () => {
       ignore = true;
       window.clearInterval(feedTimer);
     };
-  }, []);
+  }, [hasLiveMatches]);
 
   return { teams, updatedAt, source };
 }
@@ -726,9 +731,11 @@ function useLiveMatches() {
 
   useEffect(() => {
     let ignore = false;
+    let matchTimer: number | undefined;
 
     async function loadMatches() {
       const urls = [fifaServerlessMatchesUrl, fifaMatchesProxyUrl, fifaMatchesDirectUrl];
+      let nextRefreshMs = idleRefreshMs;
       for (const url of urls) {
         try {
           const response = await fetch(url, { cache: "no-store" });
@@ -736,18 +743,19 @@ function useLiveMatches() {
           const data = (await response.json()) as FifaMatchesResponse;
           if (!Array.isArray(data.Results)) throw new Error("No FIFA matches");
           if (!ignore) setMatches(data.Results);
-          return;
+          nextRefreshMs = data.Results.some((match) => getMatchState(match) === "live") ? liveRefreshMs : idleRefreshMs;
+          break;
         } catch {
           continue;
         }
       }
+      if (!ignore) matchTimer = window.setTimeout(loadMatches, nextRefreshMs);
     }
 
     void loadMatches();
-    const matchTimer = window.setInterval(loadMatches, refreshMs);
     return () => {
       ignore = true;
-      window.clearInterval(matchTimer);
+      if (matchTimer !== undefined) window.clearTimeout(matchTimer);
     };
   }, []);
 
@@ -755,8 +763,9 @@ function useLiveMatches() {
 }
 
 function App() {
-  const { teams: fifaTeams, updatedAt, source } = useLiveTeams();
   const matches = useLiveMatches();
+  const hasLiveMatches = matches.some((match) => getMatchState(match) === "live");
+  const { teams: fifaTeams, updatedAt, source } = useLiveTeams(hasLiveMatches);
   const [activeTab, setActiveTab] = useState<RankingTab>("ranking");
   const simulatedProbabilities = useMemo(() => simulateQualification(matches, fifaTeams), [matches, fifaTeams]);
   const probabilitiesReady = simulatedProbabilities.size > 0;
