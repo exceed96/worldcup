@@ -373,7 +373,7 @@ function createSeededRandom(seed: number) {
 function hashMatchSnapshot(matches: FifaMatchRow[]) {
   let hash = 2166136261;
   const snapshot = matches
-    .map((match) => `${match.IdMatch}:${match.HomeTeamScore}:${match.AwayTeamScore}:${match.MatchStatus}:${match.MatchTime ?? ""}`)
+    .map((match) => `${match.IdMatch}:${match.HomeTeamScore}:${match.AwayTeamScore}:${match.MatchStatus}`)
     .join("|");
   for (let index = 0; index < snapshot.length; index += 1) {
     hash ^= snapshot.charCodeAt(index);
@@ -540,7 +540,9 @@ function simulateQualification(matches: FifaMatchRow[], trackedTeams: ThirdPlace
     openMatches.forEach(({ match, group }) => {
       const home = match.Home!.Abbreviation;
       const away = match.Away!.Abbreviation;
-      const minute = Number(match.MatchTime?.match(/\d+/)?.[0] ?? 0);
+      const phase = getLiveMatchPhase(match);
+      const parsedMinute = Number(match.MatchTime?.match(/\d+/)?.[0] ?? 0);
+      const minute = parsedMinute || (phase?.kind === "half-time" ? 45 : phase?.kind === "hydration" ? (phase.clock.startsWith("67") ? 67 : 22) : 0);
       const remainingShare = getMatchState(match) === "live" ? clamp((90 - minute) / 90, 0, 1) : 1;
       const result = {
         home,
